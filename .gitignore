@@ -1,4 +1,11 @@
-node_modules/
+﻿node_modules/
 .env
 .env.*
 !.env.example
+
+# File cadangan
+*.backup
+
+# Konfigurasi dan pengujian lokal
+/api/db.php
+/api/test-db.php

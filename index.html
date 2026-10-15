@@ -208,7 +208,7 @@
   // ================================================================
   const API_URL = 'api/energy.php';
   const REFRESH_INTERVAL_MS = 10000;
-  let DEMO_MODE = true;
+  let DEMO_MODE = false;
   let selectedRange = 'day';
   let selectedMetric = 'active_kw';
   let latestData = null;
@@ -217,9 +217,19 @@
 
   const $ = (id) => document.getElementById(id);
   const fmt = (value, digits = 2) => {
-    const n = Number(value);
-    return Number.isFinite(n) ? n.toLocaleString('id-ID', { minimumFractionDigits: digits, maximumFractionDigits: digits }) : '—';
-  };
+  if (value === null || value === undefined || value === '') {
+    return '—';
+  }
+
+  const n = Number(value);
+
+  return Number.isFinite(n)
+    ? n.toLocaleString('id-ID', {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits
+      })
+    : '—';
+};
   const setText = (id, value) => { const el = $(id); if (el) el.textContent = value; };
 
   function createDemoData(range = 'day') {
@@ -271,15 +281,31 @@
     return base;
   }
 
-  function normalizeHistory(raw) {
-    if (!Array.isArray(raw)) return [];
-    return raw.map((item) => ({
-      label: item.label ?? item.time ?? item.timestamp ?? '',
-      active_kw: Number(item.active_kw ?? item.active_power_kw ?? 0),
-      reactive_kvar: Number(item.reactive_kvar ?? item.reactive_power_kvar ?? 0),
-      apparent_kva: Number(item.apparent_kva ?? item.apparent_power_kva ?? 0)
-    }));
-  }
+function normalizeHistory(raw) {
+  if (!Array.isArray(raw)) return [];
+
+  const toNullableNumber = (value) => {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  };
+
+  return raw.map((item) => ({
+    label: item.label ?? item.time ?? item.timestamp ?? '',
+    active_kw: toNullableNumber(
+      item.active_kw ?? item.active_power_kw
+    ),
+    reactive_kvar: toNullableNumber(
+      item.reactive_kvar ?? item.reactive_power_kvar
+    ),
+    apparent_kva: toNullableNumber(
+      item.apparent_kva ?? item.apparent_power_kva
+    )
+  }));
+}
 
   function validatePayload(data) {
     if (!data || typeof data !== 'object') throw new Error('Respons API bukan objek JSON.');
@@ -350,10 +376,20 @@
     const current = data.current || {};
     const power = data.power || {};
     const energy = data.energy || {};
-    const vAvg = Number(vln.avg ?? ((Number(vln.r || 0) + Number(vln.s || 0) + Number(vln.t || 0)) / 3));
-    const iAvg = Number(current.avg ?? ((Number(current.r || 0) + Number(current.s || 0) + Number(current.t || 0)) / 3));
-    const pf = Number(power.power_factor ?? 0);
-    const load = Number(power.avg_load_percent ?? 0);
+    const vAvg = vln.avg ?? (
+  ['r', 's', 't'].every(phase => vln[phase] != null)
+    ? (Number(vln.r) + Number(vln.s) + Number(vln.t)) / 3
+    : null
+);
+
+const iAvg = current.avg ?? (
+  ['r', 's', 't'].every(phase => current[phase] != null)
+    ? (Number(current.r) + Number(current.s) + Number(current.t)) / 3
+    : null
+);
+
+const pf = power.power_factor;
+const load = power.avg_load_percent;
 
     setText('kpiVoltage', fmt(vAvg, 1));
     setText('voltageMini', `${fmt(vln.r, 1)} / ${fmt(vln.s, 1)} / ${fmt(vln.t, 1)}`);
@@ -392,7 +428,7 @@
     const rows = Array.isArray(history) ? history : [];
     const config = metricConfig[selectedMetric];
     const labels = rows.map((item) => item.label || '');
-    const values = rows.map((item) => Number(item[selectedMetric] ?? 0));
+    const values = rows.map((item) => item[selectedMetric] ?? null);
     const ctx = $('energyChart').getContext('2d');
     if (chart) chart.destroy();
     chart = new Chart(ctx, {
