@@ -79,7 +79,7 @@
           <div class="flex flex-wrap items-center gap-2 sm:gap-3">
             <div class="mr-auto flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 sm:mr-0">
               <span id="statusDot" class="h-2 w-2 rounded-full bg-amber-400"></span>
-              <span id="connectionLabel" class="text-xs font-semibold text-slate-600">Mode simulasi</span>
+<span id="connectionLabel" class="text-xs font-semibold text-slate-600">Menghubungkan API...</span>
               <span class="text-slate-300">|</span><span id="lastUpdated" class="text-xs tabular-nums text-slate-500">--:--:--</span>
             </div>
             <button id="refreshBtn" class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-400/50" type="button">
@@ -106,7 +106,7 @@
         </section>
 
         <div id="notice" class="mb-5 hidden rounded-xl border px-4 py-3 text-sm" role="status" aria-live="polite"></div>
-        <div class="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900" id="demoNotice">
+        <div class="mb-5 hidden items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900" id="demoNotice">
           <svg class="mt-0.5 shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/><path d="M12 8v4m0 4h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
           <p><strong>Data simulasi:</strong> angka pada halaman ini dibuat untuk demonstrasi UI, bukan pembacaan nyata PM2100. Gunakan tombol <strong>Connect API</strong> setelah endpoint PHP tersedia.</p>
         </div>
@@ -115,27 +115,27 @@
         <section aria-label="Metrik utama" class="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-4">
           <article class="metric-card rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft">
             <div class="flex items-start justify-between"><div class="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-600"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2v20M4.9 5.5l14.2 13M2 12h20M4.9 18.5l14.2-13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div><span class="rounded-lg bg-sky-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-sky-700">Voltage</span></div>
-            <div class="mt-5 flex items-end gap-2"><span id="kpiVoltage" class="value-number text-3xl font-extrabold text-slate-950">231.1</span><span class="mb-1 text-sm font-semibold text-slate-400">V</span></div>
+            <div class="mt-5 flex items-end gap-2"><span id="kpiVoltage" class="value-number text-3xl font-extrabold text-slate-950">—</span><span class="mb-1 text-sm font-semibold text-slate-400">V</span></div>
             <div class="mt-1 text-xs text-slate-500">Rata-rata tegangan fasa-ke-netral</div>
-            <div class="mt-4 flex items-center justify-between border-t border-slate-100 pt-3"><span class="text-xs text-slate-500">V L-N per fasa</span><span id="voltageMini" class="text-xs font-bold text-slate-700">231.4 / 229.8 / 232.1</span></div>
+            <div class="mt-4 flex items-center justify-between border-t border-slate-100 pt-3"><span class="text-xs text-slate-500">V L-N per fasa</span><span id="voltageMini" class="text-xs font-bold text-slate-700">—</span></div>
           </article>
           <article class="metric-card rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft">
             <div class="flex items-start justify-between"><div class="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 3 4.5 13h5L9 21l10.5-11h-5L15 3h-3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></div><span class="rounded-lg bg-violet-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-violet-700">Current</span></div>
-            <div class="mt-5 flex items-end gap-2"><span id="kpiCurrent" class="value-number text-3xl font-extrabold text-slate-950">12.43</span><span class="mb-1 text-sm font-semibold text-slate-400">A</span></div>
+            <div class="mt-5 flex items-end gap-2"><span id="kpiCurrent" class="value-number text-3xl font-extrabold text-slate-950">—</span><span class="mb-1 text-sm font-semibold text-slate-400">A</span></div>
             <div class="mt-1 text-xs text-slate-500">Rata-rata arus tiga fasa</div>
-            <div class="mt-4 flex items-center justify-between border-t border-slate-100 pt-3"><span class="text-xs text-slate-500">Netral (N)</span><span id="currentNeutralMini" class="text-xs font-bold text-slate-700">1.60 A</span></div>
+            <div class="mt-4 flex items-center justify-between border-t border-slate-100 pt-3"><span class="text-xs text-slate-500">Netral (N)</span><span id="currentNeutralMini" class="text-xs font-bold text-slate-700">—</span></div>
           </article>
           <article class="metric-card rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft">
             <div class="flex items-start justify-between"><div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 12h4l3-8 4 16 3-8h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><span class="rounded-lg bg-emerald-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">Active power</span></div>
-            <div class="mt-5 flex items-end gap-2"><span id="kpiPower" class="value-number text-3xl font-extrabold text-slate-950">8.42</span><span class="mb-1 text-sm font-semibold text-slate-400">kW</span></div>
+            <div class="mt-5 flex items-end gap-2"><span id="kpiPower" class="value-number text-3xl font-extrabold text-slate-950">—</span><span class="mb-1 text-sm font-semibold text-slate-400">kW</span></div>
             <div class="mt-1 text-xs text-slate-500">Daya aktif saat ini</div>
-            <div class="mt-4 flex items-center justify-between border-t border-slate-100 pt-3"><span class="text-xs text-slate-500">Power factor</span><span id="powerFactorMini" class="text-xs font-bold text-slate-700">0.97</span></div>
+            <div class="mt-4 flex items-center justify-between border-t border-slate-100 pt-3"><span class="text-xs text-slate-500">Power factor</span><span id="powerFactorMini" class="text-xs font-bold text-slate-700">—</span></div>
           </article>
           <article class="metric-card rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft">
             <div class="flex items-start justify-between"><div class="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-orange-600"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 3v9l6 3M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div><span class="rounded-lg bg-orange-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-orange-700">Energy</span></div>
-            <div class="mt-5 flex items-end gap-2"><span id="kpiEnergy" class="value-number text-3xl font-extrabold text-slate-950">12,548.2</span><span class="mb-1 text-sm font-semibold text-slate-400">kWh</span></div>
+            <div class="mt-5 flex items-end gap-2"><span id="kpiEnergy" class="value-number text-3xl font-extrabold text-slate-950">—</span><span class="mb-1 text-sm font-semibold text-slate-400">kWh</span></div>
             <div class="mt-1 text-xs text-slate-500">Akumulasi energi aktif</div>
-            <div class="mt-4 flex items-center justify-between border-t border-slate-100 pt-3"><span class="text-xs text-slate-500">Energi reaktif</span><span id="reactiveEnergyMini" class="text-xs font-bold text-slate-700">3,152.8 kVArh</span></div>
+            <div class="mt-4 flex items-center justify-between border-t border-slate-100 pt-3"><span class="text-xs text-slate-500">Energi reaktif</span><span id="reactiveEnergyMini" class="text-xs font-bold text-slate-700">—</span></div>
           </article>
         </section>
 
@@ -144,16 +144,19 @@
           <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
             <div><div class="flex items-center gap-2"><h2 class="text-base font-extrabold text-slate-900 sm:text-lg">Tren penggunaan listrik</h2><span class="rounded-md bg-emerald-50 px-2 py-1 text-[9px] font-extrabold uppercase tracking-widest text-emerald-700">Time series</span></div><p class="mt-1 text-xs leading-relaxed text-slate-500">Perubahan beban listrik dari waktu ke waktu.</p></div>
             <div class="flex flex-wrap items-center gap-2">
-              <div class="inline-flex rounded-xl bg-slate-100 p-1" role="group" aria-label="Rentang grafik"><button type="button" data-range="day" class="range-btn rounded-lg bg-white px-3 py-2 text-xs font-bold text-slate-900 shadow-sm">Hari ini</button><button type="button" data-range="week" class="range-btn rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:text-slate-900">7 hari</button></div>
-              <select id="chartMetric" class="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" aria-label="Parameter grafik"><option value="active_kw">Daya aktif (kW)</option><option value="reactive_kvar">Daya reaktif (kVAr)</option><option value="apparent_kva">Daya semu (kVA)</option></select>
+  <div class="inline-flex rounded-xl bg-slate-100 p-1" role="group" aria-label="Rentang grafik">
+  <button type="button" data-range="day" class="range-btn rounded-lg bg-white px-3 py-2 text-xs font-bold text-slate-900 shadow-sm">Hari ini</button>
+  <button type="button" data-range="week" class="range-btn rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:text-slate-900">7 hari</button>
+  <button type="button" data-range="month" class="range-btn rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:text-slate-900">30 hari</button>
+</div>              <select id="chartMetric" class="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" aria-label="Parameter grafik"><option value="active_kw">Daya aktif (kW)</option><option value="reactive_kvar">Daya reaktif (kVAr)</option><option value="apparent_kva">Daya semu (kVA)</option></select>
             </div>
           </div>
           <div class="mt-6 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_220px]">
-            <div class="min-w-0"><div class="chart-wrap"><canvas id="energyChart" role="img" aria-label="Grafik tren penggunaan listrik"></canvas></div><div class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-slate-500"><span class="flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-emerald-500"></span><span id="chartLegendLabel">Daya aktif (kW)</span></span><span id="chartRangeLabel">Data simulasi · hari ini</span></div></div>
+            <div class="min-w-0"><div class="chart-wrap"><canvas id="energyChart" role="img" aria-label="Grafik tren penggunaan listrik"></canvas></div><div class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-slate-500"><span class="flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-emerald-500"></span><span id="chartLegendLabel">Daya aktif (kW)</span></span><span id="chartRangeLabel">Menunggu data API...</span></div></div>
             <aside class="grid grid-cols-2 gap-3 xl:grid-cols-1">
-              <div class="rounded-xl bg-slate-50 p-4"><div class="text-[10px] font-bold uppercase tracking-[.12em] text-slate-400">Daya reaktif</div><div class="mt-2"><span id="sideReactive" class="value-number text-2xl font-extrabold text-slate-900">2.15</span><span class="ml-1 text-xs font-semibold text-slate-400">kVAr</span></div><div class="mt-2 text-[10px] text-slate-500">Komponen daya reaktif</div></div>
-              <div class="rounded-xl bg-slate-50 p-4"><div class="text-[10px] font-bold uppercase tracking-[.12em] text-slate-400">Daya semu</div><div class="mt-2"><span id="sideApparent" class="value-number text-2xl font-extrabold text-slate-900">8.69</span><span class="ml-1 text-xs font-semibold text-slate-400">kVA</span></div><div class="mt-2 text-[10px] text-slate-500">Total daya tampak</div></div>
-              <div class="col-span-2 rounded-xl border border-slate-200 bg-white p-4 xl:col-span-1"><div class="flex items-center justify-between"><div class="text-[10px] font-bold uppercase tracking-[.12em] text-slate-400">Power factor</div><span class="text-[10px] font-bold text-emerald-600">PF</span></div><div class="mt-2 flex items-end justify-between"><div><span id="sidePF" class="value-number text-2xl font-extrabold text-slate-900">0.97</span><span class="ml-1 text-xs font-semibold text-slate-400">cos φ</span></div><div class="mb-1 h-2 w-20 overflow-hidden rounded-full bg-slate-100"><div id="pfBar" class="h-full rounded-full bg-emerald-500" style="width:97%"></div></div></div><div class="mt-2 text-[10px] text-slate-500">Mendekati 1 berarti daya lebih efektif</div></div>
+              <div class="rounded-xl bg-slate-50 p-4"><div class="text-[10px] font-bold uppercase tracking-[.12em] text-slate-400">Daya reaktif</div><div class="mt-2"><span id="sideReactive" class="value-number text-2xl font-extrabold text-slate-900">—</span><span class="ml-1 text-xs font-semibold text-slate-400">kVAr</span></div><div class="mt-2 text-[10px] text-slate-500">Komponen daya reaktif</div></div>
+              <div class="rounded-xl bg-slate-50 p-4"><div class="text-[10px] font-bold uppercase tracking-[.12em] text-slate-400">Daya semu</div><div class="mt-2"><span id="sideApparent" class="value-number text-2xl font-extrabold text-slate-900">—</span><span class="ml-1 text-xs font-semibold text-slate-400">kVA</span></div><div class="mt-2 text-[10px] text-slate-500">Total daya tampak</div></div>
+              <div class="col-span-2 rounded-xl border border-slate-200 bg-white p-4 xl:col-span-1"><div class="flex items-center justify-between"><div class="text-[10px] font-bold uppercase tracking-[.12em] text-slate-400">Power factor</div><span class="text-[10px] font-bold text-emerald-600">PF</span></div><div class="mt-2 flex items-end justify-between"><div><span id="sidePF" class="value-number text-2xl font-extrabold text-slate-900">—</span><span class="ml-1 text-xs font-semibold text-slate-400">cos φ</span></div><div class="mb-1 h-2 w-20 overflow-hidden rounded-full bg-slate-100"><div id="pfBar" class="h-full rounded-full bg-emerald-500" style="width:0%"></div></div></div><div class="mt-2 text-[10px] text-slate-500">Mendekati 1 berarti daya lebih efektif</div></div>
             </aside>
           </div>
         </section>
@@ -165,25 +168,25 @@
             <!-- Voltage panel -->
             <article class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft sm:p-6">
               <div class="flex items-start justify-between"><div class="flex items-center gap-3"><div class="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-600"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M12 2v20M4.9 5.5l14.2 13M2 12h20M4.9 18.5l14.2-13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div><div><h3 class="font-extrabold text-slate-900">Tegangan (Voltage)</h3><p class="text-xs text-slate-500">Fasa-ke-netral & antarfasa</p></div></div><span class="rounded-lg bg-sky-50 px-2.5 py-1 text-[10px] font-bold text-sky-700">V</span></div>
-              <div class="mt-5"><div class="mb-2 text-[10px] font-bold uppercase tracking-[.15em] text-slate-400">Voltage line-to-neutral (V L-N)</div><div class="grid grid-cols-3 gap-2"><div class="rounded-xl border border-slate-100 bg-slate-50/80 p-3"><div class="text-[11px] font-bold text-slate-500">Fasa R</div><div class="mt-1 text-xl font-extrabold text-slate-900"><span id="vlnR">231.4</span><small class="ml-1 text-[10px] font-semibold text-slate-400">V</small></div></div><div class="rounded-xl border border-slate-100 bg-slate-50/80 p-3"><div class="text-[11px] font-bold text-slate-500">Fasa S</div><div class="mt-1 text-xl font-extrabold text-slate-900"><span id="vlnS">229.8</span><small class="ml-1 text-[10px] font-semibold text-slate-400">V</small></div></div><div class="rounded-xl border border-slate-100 bg-slate-50/80 p-3"><div class="text-[11px] font-bold text-slate-500">Fasa T</div><div class="mt-1 text-xl font-extrabold text-slate-900"><span id="vlnT">232.1</span><small class="ml-1 text-[10px] font-semibold text-slate-400">V</small></div></div></div></div>
-              <div class="mt-5"><div class="mb-2 text-[10px] font-bold uppercase tracking-[.15em] text-slate-400">Voltage line-to-line (V L-L)</div><div class="grid grid-cols-3 gap-2"><div class="rounded-xl border border-slate-100 p-3"><div class="text-[11px] font-bold text-slate-500">R – S</div><div class="mt-1 text-lg font-extrabold text-slate-900"><span id="vllRS">400.8</span><small class="ml-1 text-[10px] font-semibold text-slate-400">V</small></div></div><div class="rounded-xl border border-slate-100 p-3"><div class="text-[11px] font-bold text-slate-500">S – T</div><div class="mt-1 text-lg font-extrabold text-slate-900"><span id="vllST">399.7</span><small class="ml-1 text-[10px] font-semibold text-slate-400">V</small></div></div><div class="rounded-xl border border-slate-100 p-3"><div class="text-[11px] font-bold text-slate-500">T – R</div><div class="mt-1 text-lg font-extrabold text-slate-900"><span id="vllTR">401.2</span><small class="ml-1 text-[10px] font-semibold text-slate-400">V</small></div></div></div></div>
+              <div class="mt-5"><div class="mb-2 text-[10px] font-bold uppercase tracking-[.15em] text-slate-400">Voltage line-to-neutral (V L-N)</div><div class="grid grid-cols-3 gap-2"><div class="rounded-xl border border-slate-100 bg-slate-50/80 p-3"><div class="text-[11px] font-bold text-slate-500">Fasa R</div><div class="mt-1 text-xl font-extrabold text-slate-900"><span id="vlnR">—</span><small class="ml-1 text-[10px] font-semibold text-slate-400">V</small></div></div><div class="rounded-xl border border-slate-100 bg-slate-50/80 p-3"><div class="text-[11px] font-bold text-slate-500">Fasa S</div><div class="mt-1 text-xl font-extrabold text-slate-900"><span id="vlnS">—</span><small class="ml-1 text-[10px] font-semibold text-slate-400">V</small></div></div><div class="rounded-xl border border-slate-100 bg-slate-50/80 p-3"><div class="text-[11px] font-bold text-slate-500">Fasa T</div><div class="mt-1 text-xl font-extrabold text-slate-900"><span id="vlnT">—</span><small class="ml-1 text-[10px] font-semibold text-slate-400">V</small></div></div></div></div>
+              <div class="mt-5"><div class="mb-2 text-[10px] font-bold uppercase tracking-[.15em] text-slate-400">Voltage line-to-line (V L-L)</div><div class="grid grid-cols-3 gap-2"><div class="rounded-xl border border-slate-100 p-3"><div class="text-[11px] font-bold text-slate-500">R – S</div><div class="mt-1 text-lg font-extrabold text-slate-900"><span id="vllRS">—</span><small class="ml-1 text-[10px] font-semibold text-slate-400">V</small></div></div><div class="rounded-xl border border-slate-100 p-3"><div class="text-[11px] font-bold text-slate-500">S – T</div><div class="mt-1 text-lg font-extrabold text-slate-900"><span id="vllST">—</span><small class="ml-1 text-[10px] font-semibold text-slate-400">V</small></div></div><div class="rounded-xl border border-slate-100 p-3"><div class="text-[11px] font-bold text-slate-500">T – R</div><div class="mt-1 text-lg font-extrabold text-slate-900"><span id="vllTR">—</span><small class="ml-1 text-[10px] font-semibold text-slate-400">V</small></div></div></div></div>
             </article>
             <!-- Current panel -->
             <article class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft sm:p-6">
               <div class="flex items-start justify-between"><div class="flex items-center gap-3"><div class="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M12 3 4.5 13h5L9 21l10.5-11h-5L15 3h-3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></div><div><h3 class="font-extrabold text-slate-900">Arus (Current)</h3><p class="text-xs text-slate-500">Arus per fasa dan netral</p></div></div><span class="rounded-lg bg-violet-50 px-2.5 py-1 text-[10px] font-bold text-violet-700">A</span></div>
-              <div class="mt-6 space-y-5"><div class="flex items-center gap-3"><span class="w-8 text-xs font-extrabold text-slate-500">R</span><div class="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-100"><div id="ibarR" class="h-full rounded-full bg-sky-400" style="width:62%"></div></div><span id="currentR" class="w-16 text-right text-sm font-extrabold tabular-nums text-slate-800">12.4 A</span></div><div class="flex items-center gap-3"><span class="w-8 text-xs font-extrabold text-slate-500">S</span><div class="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-100"><div id="ibarS" class="h-full rounded-full bg-violet-400" style="width:59%"></div></div><span id="currentS" class="w-16 text-right text-sm font-extrabold tabular-nums text-slate-800">11.8 A</span></div><div class="flex items-center gap-3"><span class="w-8 text-xs font-extrabold text-slate-500">T</span><div class="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-100"><div id="ibarT" class="h-full rounded-full bg-emerald-400" style="width:66%"></div></div><span id="currentT" class="w-16 text-right text-sm font-extrabold tabular-nums text-slate-800">13.1 A</span></div><div class="flex items-center gap-3"><span class="w-8 text-xs font-extrabold text-slate-500">N</span><div class="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-100"><div id="ibarN" class="h-full rounded-full bg-orange-300" style="width:8%"></div></div><span id="currentN" class="w-16 text-right text-sm font-extrabold tabular-nums text-slate-800">1.6 A</span></div></div>
-              <div class="mt-6 flex items-center justify-between border-t border-slate-100 pt-4"><span class="text-xs text-slate-500">Rata-rata arus fasa</span><span class="text-sm font-extrabold text-slate-900"><span id="currentAverage">12.43</span> A</span></div>
+              <div class="mt-6 space-y-5"><div class="flex items-center gap-3"><span class="w-8 text-xs font-extrabold text-slate-500">R</span><div class="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-100"><div id="ibarR" class="h-full rounded-full bg-sky-400" style="width:0%"></div></div><span id="currentR" class="w-16 text-right text-sm font-extrabold tabular-nums text-slate-800">— A</span></div><div class="flex items-center gap-3"><span class="w-8 text-xs font-extrabold text-slate-500">S</span><div class="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-100"><div id="ibarS" class="h-full rounded-full bg-violet-400" style="width:0%"></div></div><span id="currentS" class="w-16 text-right text-sm font-extrabold tabular-nums text-slate-800">— A</span></div><div class="flex items-center gap-3"><span class="w-8 text-xs font-extrabold text-slate-500">T</span><div class="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-100"><div id="ibarT" class="h-full rounded-full bg-emerald-400" style="width:0%"></div></div><span id="currentT" class="w-16 text-right text-sm font-extrabold tabular-nums text-slate-800">— A</span></div><div class="flex items-center gap-3"><span class="w-8 text-xs font-extrabold text-slate-500">N</span><div class="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-100"><div id="ibarN" class="h-full rounded-full bg-orange-300" style="width:0%"></div></div><span id="currentN" class="w-16 text-right text-sm font-extrabold tabular-nums text-slate-800">— A</span></div></div>
+              <div class="mt-6 flex items-center justify-between border-t border-slate-100 pt-4"><span class="text-xs text-slate-500">Rata-rata arus fasa</span><span class="text-sm font-extrabold text-slate-900"><span id="currentAverage">—</span> A</span></div>
             </article>
             <!-- Power panel -->
             <article class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft sm:p-6">
               <div class="flex items-start justify-between"><div class="flex items-center gap-3"><div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M3 12h4l3-8 4 16 3-8h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div><h3 class="font-extrabold text-slate-900">Daya & faktor daya</h3><p class="text-xs text-slate-500">Power demand saat ini</p></div></div><span class="rounded-lg bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">POWER</span></div>
-              <div class="mt-5 grid grid-cols-2 gap-3"><div class="rounded-xl bg-emerald-50/70 p-4"><div class="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Active · P</div><div class="mt-2 text-2xl font-extrabold text-slate-900"><span id="activePower">8.42</span><small class="ml-1 text-xs font-semibold text-slate-400">kW</small></div></div><div class="rounded-xl bg-sky-50/70 p-4"><div class="text-[10px] font-bold uppercase tracking-wider text-sky-700">Reactive · Q</div><div class="mt-2 text-2xl font-extrabold text-slate-900"><span id="reactivePower">2.15</span><small class="ml-1 text-xs font-semibold text-slate-400">kVAr</small></div></div><div class="rounded-xl bg-violet-50/70 p-4"><div class="text-[10px] font-bold uppercase tracking-wider text-violet-700">Apparent · S</div><div class="mt-2 text-2xl font-extrabold text-slate-900"><span id="apparentPower">8.69</span><small class="ml-1 text-xs font-semibold text-slate-400">kVA</small></div></div><div class="rounded-xl border border-slate-100 p-4"><div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Power factor</div><div class="mt-2 text-2xl font-extrabold text-slate-900"><span id="powerFactor">0.97</span><small class="ml-1 text-xs font-semibold text-slate-400">cos φ</small></div><div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div id="powerFactorBar" class="h-full rounded-full bg-emerald-400" style="width:97%"></div></div></div></div>
+              <div class="mt-5 grid grid-cols-2 gap-3"><div class="rounded-xl bg-emerald-50/70 p-4"><div class="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Active · P</div><div class="mt-2 text-2xl font-extrabold text-slate-900"><span id="activePower">—</span><small class="ml-1 text-xs font-semibold text-slate-400">kW</small></div></div><div class="rounded-xl bg-sky-50/70 p-4"><div class="text-[10px] font-bold uppercase tracking-wider text-sky-700">Reactive · Q</div><div class="mt-2 text-2xl font-extrabold text-slate-900"><span id="reactivePower">—</span><small class="ml-1 text-xs font-semibold text-slate-400">kVAr</small></div></div><div class="rounded-xl bg-violet-50/70 p-4"><div class="text-[10px] font-bold uppercase tracking-wider text-violet-700">Apparent · S</div><div class="mt-2 text-2xl font-extrabold text-slate-900"><span id="apparentPower">—</span><small class="ml-1 text-xs font-semibold text-slate-400">kVA</small></div></div><div class="rounded-xl border border-slate-100 p-4"><div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Power factor</div><div class="mt-2 text-2xl font-extrabold text-slate-900"><span id="powerFactor">—</span><small class="ml-1 text-xs font-semibold text-slate-400">cos φ</small></div><div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div id="powerFactorBar" class="h-full rounded-full bg-emerald-400" style="width:0%"></div></div></div></div>
             </article>
             <!-- Energy panel -->
             <article class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft sm:p-6">
               <div class="flex items-start justify-between"><div class="flex items-center gap-3"><div class="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-orange-600"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M12 3v9l6 3M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div><h3 class="font-extrabold text-slate-900">Konsumsi & operasional</h3><p class="text-xs text-slate-500">Energi kumulatif dan karakteristik beban</p></div></div><span class="rounded-lg bg-orange-50 px-2.5 py-1 text-[10px] font-bold text-orange-700">ENERGY</span></div>
-              <div class="mt-5 space-y-3"><div class="flex items-center justify-between rounded-xl border border-slate-100 p-4"><div><div class="text-xs font-semibold text-slate-500">Energi aktif kumulatif</div><div class="mt-1 text-2xl font-extrabold text-slate-900"><span id="activeEnergy">12,548.2</span><small class="ml-1 text-xs font-semibold text-slate-400">kWh</small></div></div><div class="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-orange-500"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h7l-1 8 10-13h-7l0-7Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></div></div><div class="flex items-center justify-between rounded-xl border border-slate-100 p-4"><div><div class="text-xs font-semibold text-slate-500">Energi reaktif kumulatif</div><div class="mt-1 text-2xl font-extrabold text-slate-900"><span id="activeReactiveEnergy">3,152.8</span><small class="ml-1 text-xs font-semibold text-slate-400">kVArh</small></div></div><div class="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-500"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 3v18M5 10h14M7 6l10 12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div></div></div>
-              <div class="mt-3 grid grid-cols-2 gap-3"><div class="rounded-xl bg-slate-50 p-4"><div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Run hours</div><div class="mt-2 text-xl font-extrabold text-slate-900"><span id="runHours">4,821.6</span><small class="ml-1 text-[10px] font-semibold text-slate-400">jam</small></div></div><div class="rounded-xl bg-slate-50 p-4"><div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Rata-rata beban</div><div class="mt-2 text-xl font-extrabold text-slate-900"><span id="avgLoad">42</span><small class="ml-1 text-[10px] font-semibold text-slate-400">%</small></div><div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200"><div id="avgLoadBar" class="h-full rounded-full bg-amber-400" style="width:42%"></div></div></div></div>
+              <div class="mt-5 space-y-3"><div class="flex items-center justify-between rounded-xl border border-slate-100 p-4"><div><div class="text-xs font-semibold text-slate-500">Energi aktif kumulatif</div><div class="mt-1 text-2xl font-extrabold text-slate-900"><span id="activeEnergy">—</span><small class="ml-1 text-xs font-semibold text-slate-400">kWh</small></div></div><div class="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-orange-500"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h7l-1 8 10-13h-7l0-7Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></div></div><div class="flex items-center justify-between rounded-xl border border-slate-100 p-4"><div><div class="text-xs font-semibold text-slate-500">Energi reaktif kumulatif</div><div class="mt-1 text-2xl font-extrabold text-slate-900"><span id="activeReactiveEnergy">—</span><small class="ml-1 text-xs font-semibold text-slate-400">kVArh</small></div></div><div class="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-500"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 3v18M5 10h14M7 6l10 12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div></div></div>
+              <div class="mt-3 grid grid-cols-2 gap-3"><div class="rounded-xl bg-slate-50 p-4"><div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Run hours</div><div class="mt-2 text-xl font-extrabold text-slate-900"><span id="runHours">—</span><small class="ml-1 text-[10px] font-semibold text-slate-400">jam</small></div></div><div class="rounded-xl bg-slate-50 p-4"><div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Rata-rata beban</div><div class="mt-2 text-xl font-extrabold text-slate-900"><span id="avgLoad">—</span><small class="ml-1 text-[10px] font-semibold text-slate-400">%</small></div><div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200"><div id="avgLoadBar" class="h-full rounded-full bg-amber-400" style="width:0%"></div></div></div></div>
             </article>
           </div>
         </section>
@@ -192,7 +195,7 @@
         <section id="device" class="mt-6 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft sm:p-6">
           <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-start"><div><h2 class="text-lg font-extrabold text-slate-900">Perangkat & integrasi data</h2><p class="mt-1 text-xs leading-relaxed text-slate-500">Konfigurasi awal untuk menghubungkan dashboard dengan PHP Native API.</p></div><span id="apiBadge" class="inline-flex w-fit items-center gap-2 rounded-full bg-amber-50 px-3 py-1.5 text-[10px] font-bold text-amber-700"><span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>Belum terhubung</span></div>
           <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3"><div class="rounded-xl border border-slate-100 p-4"><div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Power meter</div><div class="mt-2 text-sm font-extrabold text-slate-900">Schneider Electric PM2100</div><div class="mt-1 text-xs text-slate-500">Three-phase power meter</div></div><div class="rounded-xl border border-slate-100 p-4"><div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Field connection</div><div class="mt-2 text-sm font-extrabold text-slate-900">ESP32 · RS485 / Modbus RTU</div><div class="mt-1 text-xs text-slate-500">ESP32 mengirim data melalui HTTP ke server lokal</div></div><div class="rounded-xl border border-slate-100 p-4"><div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Dashboard API endpoint</div><div class="mt-2 break-all font-mono text-xs font-bold text-slate-900" id="endpointDisplay">api/energy.php</div><div class="mt-1 text-xs text-slate-500">GET JSON · rentang grafik dikirim sebagai parameter</div></div></div>
-          <div class="mt-4 flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div class="max-w-2xl"><div class="text-xs font-bold text-slate-800">Kontrak data front-end</div><p class="mt-1 text-xs leading-relaxed text-slate-500">Endpoint perlu mengembalikan objek JSON dengan properti <code class="rounded bg-white px-1 py-0.5 text-slate-700">voltage</code>, <code class="rounded bg-white px-1 py-0.5 text-slate-700">current</code>, <code class="rounded bg-white px-1 py-0.5 text-slate-700">power</code>, <code class="rounded bg-white px-1 py-0.5 text-slate-700">energy</code>, <code class="rounded bg-white px-1 py-0.5 text-slate-700">run_hours</code>, dan <code class="rounded bg-white px-1 py-0.5 text-slate-700">history</code>.</p></div><button id="exportBtn" type="button" class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-100"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v3h16v-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Export data grafik (CSV)</button></div>
+          <div class="mt-4 flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div class="max-w-2xl"><div class="text-xs font-bold text-slate-800">Kontrak data front-end</div><p class="mt-1 text-xs leading-relaxed text-slate-500">Endpoint perlu mengembalikan objek JSON dengan properti <code class="rounded bg-white px-1 py-0.5 text-slate-700">voltage</code>, <code class="rounded bg-white px-1 py-0.5 text-slate-700">current</code>, <code class="rounded bg-white px-1 py-0.5 text-slate-700">power</code>, <code class="rounded bg-white px-1 py-0.5 text-slate-700">energy</code>, <code class="rounded bg-white px-1 py-0.5 text-slate-700">run_hours</code>, dan <code class="rounded bg-white px-1 py-0.5 text-slate-700">history</code>.</p></div><button id="exportBtn" type="button" class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-100"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v3h16v-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Export laporan lengkap (XLSX)</button></div>
         </section>
         <footer class="flex flex-col gap-2 py-7 text-[10px] text-slate-400 sm:flex-row sm:items-center sm:justify-between"><p>VoltView · Building Energy Monitoring Dashboard</p><p>Frontend demo · Pastikan satuan & register meter tervalidasi saat integrasi.</p></footer>
       </div>
@@ -307,13 +310,81 @@ function normalizeHistory(raw) {
   }));
 }
 
-  function validatePayload(data) {
-    if (!data || typeof data !== 'object') throw new Error('Respons API bukan objek JSON.');
-    if (!data.voltage || !data.current || !data.power || !data.energy) {
-      throw new Error('Struktur JSON tidak lengkap. Periksa properti voltage, current, power, dan energy.');
-    }
-    return data;
+
+function validatePayload(data) {
+  if (!data || typeof data !== 'object') {
+    throw new Error('Respons API bukan objek JSON.');
   }
+
+  if (data.success !== true) {
+    throw new Error('API tidak mengembalikan status success: true.');
+  }
+
+  if (!data.voltage || !data.current || !data.power || !data.energy) {
+    throw new Error(
+      'Struktur JSON tidak lengkap: voltage, current, power, atau energy.'
+    );
+  }
+
+  const toNullableNumber = (value) => {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  };
+
+  const ln = data.voltage.ln ?? {};
+  const ll = data.voltage.ll ?? {};
+  const current = data.current;
+  const power = data.power;
+  const energy = data.energy;
+
+  return {
+    ...data,
+
+    voltage: {
+      ln: {
+        r: toNullableNumber(ln.r),
+        s: toNullableNumber(ln.s),
+        t: toNullableNumber(ln.t),
+        avg: toNullableNumber(ln.avg)
+      },
+      ll: {
+        rs: toNullableNumber(ll.rs),
+        st: toNullableNumber(ll.st),
+        tr: toNullableNumber(ll.tr),
+        avg: toNullableNumber(ll.avg)
+      }
+    },
+
+    current: {
+      r: toNullableNumber(current.r),
+      s: toNullableNumber(current.s),
+      t: toNullableNumber(current.t),
+      n: toNullableNumber(current.n),
+      avg: toNullableNumber(current.avg)
+    },
+
+    power: {
+      active_kw: toNullableNumber(power.active_kw),
+      reactive_kvar: toNullableNumber(power.reactive_kvar),
+      apparent_kva: toNullableNumber(power.apparent_kva),
+      power_factor: toNullableNumber(power.power_factor),
+      avg_load_percent: toNullableNumber(power.avg_load_percent)
+    },
+
+    energy: {
+      active_kwh: toNullableNumber(energy.active_kwh),
+      reactive_kvarh: toNullableNumber(energy.reactive_kvarh)
+    },
+
+    run_hours: toNullableNumber(data.run_hours),
+    history: normalizeHistory(data.history)
+  };
+}
+
 
   async function getData() {
     if (DEMO_MODE) return createDemoData(selectedRange);
@@ -328,7 +399,6 @@ function normalizeHistory(raw) {
       });
       if (!response.ok) throw new Error(`HTTP ${response.status} dari endpoint API.`);
       const data = validatePayload(await response.json());
-      data.history = normalizeHistory(data.history);
       return data;
     } catch (error) {
       if (error.name === 'AbortError') throw new Error('Permintaan API melewati batas waktu 8 detik.');
@@ -407,13 +477,19 @@ const load = power.avg_load_percent;
     setText('currentAverage', fmt(iAvg, 2));
     setText('activePower', fmt(power.active_kw, 2)); setText('reactivePower', fmt(power.reactive_kvar, 2));
     setText('apparentPower', fmt(power.apparent_kva, 2)); setText('powerFactor', fmt(pf, 2));
-    $('powerFactorBar').style.width = `${Math.max(0, Math.min(100, pf * 100))}%`;
-    setText('sideReactive', fmt(power.reactive_kvar, 2)); setText('sideApparent', fmt(power.apparent_kva, 2)); setText('sidePF', fmt(pf, 2));
-    $('pfBar').style.width = `${Math.max(0, Math.min(100, pf * 100))}%`;
+const pfWidth = Number.isFinite(pf)
+  ? Math.max(0, Math.min(100, pf * 100))
+  : 0;
+
+$('powerFactorBar').style.width = `${pfWidth}%`;
+$('pfBar').style.width = `${pfWidth}%`;    setText('sideReactive', fmt(power.reactive_kvar, 2)); setText('sideApparent', fmt(power.apparent_kva, 2)); setText('sidePF', fmt(pf, 2));
     setText('activeEnergy', fmt(energy.active_kwh, 1)); setText('activeReactiveEnergy', fmt(energy.reactive_kvarh, 1));
     setText('runHours', fmt(data.run_hours, 1)); setText('avgLoad', fmt(load, 0));
-    $('avgLoadBar').style.width = `${Math.max(0, Math.min(100, load))}%`;
+const loadWidth = Number.isFinite(load)
+  ? Math.max(0, Math.min(100, load))
+  : 0;
 
+$('avgLoadBar').style.width = `${loadWidth}%`;
     const time = data.timestamp ? new Date(data.timestamp) : new Date();
     setText('lastUpdated', time.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }));
   }
@@ -433,7 +509,7 @@ const load = power.avg_load_percent;
     if (chart) chart.destroy();
     chart = new Chart(ctx, {
       type: 'line',
-      data: { labels, datasets: [{ label: config.label, data: values, borderColor: config.color, backgroundColor: config.fill, fill: true, borderWidth: 2.5, pointRadius: selectedRange === 'week' ? 0 : 2.5, pointHoverRadius: 5, pointBackgroundColor: '#ffffff', pointBorderColor: config.color, pointBorderWidth: 2, tension: .35 }] },
+      data: { labels, datasets: [{ label: config.label, data: values, borderColor: config.color, backgroundColor: config.fill, fill: true, borderWidth: 2.5, pointRadius: selectedRange === 'day' ? 2.5 : 0, pointHoverRadius: 5, pointBackgroundColor: '#ffffff', pointBorderColor: config.color, pointBorderWidth: 2, tension: .35 }] },
       options: {
         responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' },
         plugins: {
@@ -441,14 +517,51 @@ const load = power.avg_load_percent;
           tooltip: { backgroundColor: '#0b1220', padding: 12, titleFont: { family: 'DM Sans', weight: '600' }, bodyFont: { family: 'DM Sans' }, displayColors: false, callbacks: { label: (context) => `${config.label}: ${fmt(context.parsed.y, 2)}` } }
         },
         scales: {
-          x: { grid: { display: false }, border: { display: false }, ticks: { color: '#94a3b8', maxTicksLimit: selectedRange === 'week' ? 7 : 8, maxRotation: 0, autoSkip: true, font: { family: 'DM Sans', size: 10 } } },
+          x: { grid: { display: false }, border: { display: false }, ticks: { color: '#94a3b8', maxTicksLimit: selectedRange === 'day' ? 8 : 7, maxRotation: 0, autoSkip: true, font: { family: 'DM Sans', size: 10 } } },
           y: { beginAtZero: true, border: { display: false, dash: [3, 4] }, grid: { color: '#f1f5f9', drawTicks: false }, ticks: { color: '#94a3b8', padding: 10, font: { family: 'DM Sans', size: 10 }, callback: (value) => value }, title: { display: true, text: config.label, color: '#94a3b8', font: { family: 'DM Sans', size: 10, weight: '500' } } }
         }
       }
     });
     setText('chartLegendLabel', config.label);
-    setText('chartRangeLabel', `${useDemo ? 'Data simulasi' : 'Data API'} · ${selectedRange === 'day' ? 'hari ini' : '7 hari terakhir'}`);
-  }
+const rangeLabels = {
+  day: 'hari ini',
+  week: '7 hari terakhir',
+  month: '30 hari terakhir'
+};
+
+setText(
+  'chartRangeLabel',
+  `${useDemo ? 'Data simulasi' : 'Data API'} · ${rangeLabels[selectedRange]}`
+);
+}
+function clearMetrics() {
+  const ids = [
+    'kpiVoltage', 'voltageMini',
+    'kpiCurrent', 'currentNeutralMini',
+    'kpiPower', 'powerFactorMini',
+    'kpiEnergy', 'reactiveEnergyMini',
+    'vlnR', 'vlnS', 'vlnT',
+    'vllRS', 'vllST', 'vllTR',
+    'currentR', 'currentS', 'currentT', 'currentN',
+    'currentAverage',
+    'activePower', 'reactivePower', 'apparentPower',
+    'powerFactor',
+    'sideReactive', 'sideApparent', 'sidePF',
+    'activeEnergy', 'activeReactiveEnergy',
+    'runHours', 'avgLoad'
+  ];
+
+  ids.forEach((id) => setText(id, '—'));
+
+  ['ibarR', 'ibarS', 'ibarT', 'ibarN',
+   'powerFactorBar', 'pfBar', 'avgLoadBar'
+  ].forEach((id) => {
+    const el = $(id);
+    if (el) el.style.width = '0%';
+  });
+
+  setText('lastUpdated', '--:--:--');
+}
 
   async function refreshData() {
     const btn = $('refreshBtn'); const icon = $('refreshIcon');
@@ -461,9 +574,16 @@ const load = power.avg_load_percent;
       renderChart(data.history, DEMO_MODE);
       setConnectionState(DEMO_MODE ? 'demo' : 'online');
     } catch (error) {
-      setConnectionState('error');
-      showNotice(`Gagal mengambil data dari ${API_URL}: ${error.message} Pastikan endpoint PHP aktif dan mengembalikan JSON sesuai kontrak data.`, 'error');
-    } finally {
+  setConnectionState('error');
+  latestData = null;
+  clearMetrics();
+  renderChart([], false);
+
+  showNotice(
+    `Gagal mengambil data dari ${API_URL}: ${error.message} Pastikan endpoint PHP aktif dan mengembalikan JSON sesuai kontrak data.`,
+    'error'
+  );
+} finally {
       btn.disabled = false; btn.classList.remove('opacity-70'); icon.classList.remove('animate-spin');
     }
   }
@@ -497,16 +617,58 @@ const load = power.avg_load_percent;
       await refreshData();
     });
   });
-  $('exportBtn').addEventListener('click', () => {
-    const rows = normalizeHistory(latestData?.history || []);
-    if (!rows.length) { showNotice('Belum ada data grafik untuk diekspor.', 'error'); return; }
-    const headers = ['label', 'active_kw', 'reactive_kvar', 'apparent_kva'];
-    const csv = [headers.join(','), ...rows.map((row) => headers.map((key) => `"${String(row[key] ?? '').replaceAll('"', '""')}"`).join(','))].join('\r\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob); const link = document.createElement('a');
-    link.href = url; link.download = `energy-history-${selectedRange}-${new Date().toISOString().slice(0,10)}.csv`;
-    document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
-  });
+
+
+$('exportBtn').addEventListener('click', async () => {
+    const button = $('exportBtn');
+    const originalText = button.textContent;
+
+    try {
+        button.disabled = true;
+        button.textContent = 'Mengekspor Excel...';
+
+        const url = new URL(
+            'api/export.php',
+            window.location.href
+        );
+
+        url.searchParams.set('range', selectedRange);
+
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            throw new Error('Gagal mengekspor laporan Excel.');
+        }
+
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download =
+            `voltview-report-${selectedRange}-${new Date()
+                .toISOString()
+                .slice(0, 10)}.xlsx`;
+
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+
+        showNotice('Laporan Excel berhasil diekspor.', 'success');
+    } catch (error) {
+        console.error('Export error:', error);
+        showNotice(
+            error.message || 'Gagal mengekspor laporan.',
+            'error'
+        );
+    } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+    }
+});
+
 
   // Highlight active sidebar link when navigating to dashboard sections.
   document.querySelectorAll('aside .nav-link').forEach((link) => {
