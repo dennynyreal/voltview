@@ -2,6 +2,7 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <math.h>
+#include <WiFiClientSecure.h>
 
 // 1. KONFIGURASI WIFI
 const char* ssid = "67";
@@ -9,10 +10,10 @@ const char* password = "predatorcerr";
 
 // 2. ALAMAT API VOLTVIEW
 const char* serverURL =
-  "http://10.16.159.79/voltview/api/energy.php";
+  "https://voltview.vercel.app/api/voltview";
 
 // 3. INTERVAL PENGIRIMAN
-const unsigned long SEND_INTERVAL = 1000;
+const unsigned long SEND_INTERVAL = 10000; // 10 detik
 unsigned long lastSendTime = 0;
 
 // 4. STRUKTUR DATA PENGUKURAN
@@ -48,17 +49,16 @@ struct EnergyData {
   const char* source;
 };
 
-// 5. SUMBER DATA SEMENTARA
-// SELURUH NILAI DI SINI ADALAH SIMULASI.
+// 5. DATA SIMULASI
 // Belum membaca register Modbus Schneider PM2100.
 bool readEnergyData(EnergyData &data) {
-  data.voltage_ln_r = 250.0;
-  data.voltage_ln_s = 291.0;
-  data.voltage_ln_t = 259.0;
+  data.voltage_ln_r = 500.0;
+  data.voltage_ln_s = 221.0;
+  data.voltage_ln_t = 209.0;
 
   data.voltage_ll_rs = 400.0;
-  data.voltage_ll_st = 109.0;
-  data.voltage_ll_tr = 201.0;
+  data.voltage_ll_st = 99.0;
+  data.voltage_ll_tr = 121.0;
 
   data.voltage = (
     data.voltage_ln_r +
@@ -117,8 +117,13 @@ bool connectWiFi() {
 
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("Wi-Fi terhubung.");
+
     Serial.print("IP ESP32: ");
     Serial.println(WiFi.localIP());
+
+    Serial.print("Kekuatan sinyal: ");
+    Serial.print(WiFi.RSSI());
+    Serial.println(" dBm");
 
     return true;
   }
@@ -165,7 +170,6 @@ bool validEnergyData(const EnergyData &d) {
     }
   }
 
-  // Parameter yang tidak boleh negatif.
   const float nonNegative[] = {
     d.voltage,
     d.voltage_ln_r,
@@ -224,13 +228,26 @@ void sendEnergyData() {
     return;
   }
 
+  WiFiClientSecure client;
+
+  // HANYA UNTUK PENGUJIAN SEMENTARA.
+  // Tidak memverifikasi sertifikat server.
+  // Ganti dengan setCACert() sebelum penggunaan produksi.
+  client.setInsecure();
+
   HTTPClient http;
 
-  http.setConnectTimeout(5000);
-  http.setTimeout(5000);
+  http.setConnectTimeout(10000);
+  http.setTimeout(10000);
 
-  if (!http.begin(serverURL)) {
-    Serial.println("Gagal memulai HTTP.");
+  Serial.println();
+  Serial.println("=== VOLTVIEW ESP32 ===");
+
+  Serial.print("URL API: ");
+  Serial.println(serverURL);
+
+  if (!http.begin(client, serverURL)) {
+    Serial.println("Gagal memulai koneksi HTTPS.");
     return;
   }
 
@@ -273,22 +290,31 @@ void sendEnergyData() {
   json += data.source;
   json += "\"}";
 
-  Serial.println();
-  Serial.println("=== VOLTVIEW ESP32 ===");
   Serial.print("Sumber data: ");
   Serial.println(data.source);
 
   Serial.println("Payload JSON:");
   Serial.println(json);
 
+  // Hanya satu deklarasi httpCode.
   int httpCode = http.POST(json);
 
   Serial.print("HTTP Status: ");
   Serial.println(httpCode);
 
   if (httpCode > 0) {
+    String response = http.getString();
+
     Serial.println("Respons API:");
-    Serial.println(http.getString());
+    Serial.println(response);
+
+    if (httpCode == 201) {
+      Serial.println("Data berhasil dikirim ke API.");
+    } else {
+      Serial.println(
+        "Periksa respons API dan status penyimpanan."
+      );
+    }
   } else {
     Serial.print("HTTP gagal: ");
     Serial.println(http.errorToString(httpCode));
