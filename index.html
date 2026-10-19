@@ -20,6 +20,7 @@
     };
   </script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
     body { font-family: 'DM Sans', sans-serif; }
@@ -681,57 +682,119 @@ try {
   });
 
 
+
 $('exportBtn').addEventListener('click', async () => {
-    const button = $('exportBtn');
-    const originalText = button.textContent;
+  const button = $('exportBtn');
+  const originalHTML = button.innerHTML;
 
-    try {
-        button.disabled = true;
-        button.textContent = 'Mengekspor Excel...';
+  try {
+    button.disabled = true;
+    button.textContent = 'Mengekspor Excel...';
 
-        const url = new URL(
-            'api/export.php',
-            window.location.href
-        );
-
-        url.searchParams.set('range', selectedRange);
-
-        const response = await fetch(
-  `https://autoshipsmrc.site.je/api/export.php?range=${range}`
-);
-
-        if (!response.ok) {
-            throw new Error('Gagal mengekspor laporan Excel.');
-        }
-
-        const blob = await response.blob();
-        const objectUrl = URL.createObjectURL(blob);
-
-        const link = document.createElement('a');
-        link.href = objectUrl;
-        link.download =
-            `voltview-report-${selectedRange}-${new Date()
-                .toISOString()
-                .slice(0, 10)}.xlsx`;
-
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-
-        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-
-        showNotice('Laporan Excel berhasil diekspor.', 'success');
-    } catch (error) {
-        console.error('Export error:', error);
-        showNotice(
-            error.message || 'Gagal mengekspor laporan.',
-            'error'
-        );
-    } finally {
-        button.disabled = false;
-        button.textContent = originalText;
+    // Pastikan library Excel tersedia.
+    if (typeof XLSX === 'undefined') {
+      throw new Error('Library Excel gagal dimuat. Periksa koneksi internet.');
     }
+
+    // Gunakan rentang yang dipilih pada grafik.
+    const range = selectedRange;
+
+    const url = new URL(
+      'https://voltview.vercel.app/api/voltview'
+    );
+
+    url.searchParams.set('export', '1');
+    url.searchParams.set('range', range);
+
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store'
+    });
+
+    if (!response.ok) {
+      throw new Error(`API ekspor gagal: HTTP ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.success !== true || !Array.isArray(result.rows)) {
+      throw new Error(
+        result.message || 'Format data ekspor dari Vercel tidak sesuai.'
+      );
+    }
+
+    if (result.rows.length === 0) {
+      throw new Error('Belum ada data untuk diekspor pada periode ini.');
+    }
+
+    // Sheet 1: Ringkasan laporan.
+    const rangeLabels = {
+      day: 'Hari ini',
+      week: '7 hari terakhir',
+      month: '30 hari terakhir'
+    };
+
+    const summary = [
+      { Informasi: 'Nama laporan', Nilai: 'VoltView Energy Monitoring' },
+      { Informasi: 'Periode', Nilai: rangeLabels[range] || range },
+      { Informasi: 'Waktu ekspor', Nilai: new Date().toLocaleString('id-ID') },
+      { Informasi: 'Jumlah data', Nilai: result.rows.length },
+      { Informasi: 'Sumber data', Nilai: 'Vercel API / Neon PostgreSQL' }
+    ];
+
+    const workbook = XLSX.utils.book_new();
+
+    const summarySheet = XLSX.utils.json_to_sheet(summary);
+    summarySheet['!cols'] = [
+      { wch: 22 },
+      { wch: 38 }
+    ];
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      summarySheet,
+      'Ringkasan'
+    );
+
+    // Sheet 2: Data pengukuran lengkap dari API.
+    const dataSheet = XLSX.utils.json_to_sheet(result.rows);
+
+    dataSheet['!cols'] = Object.keys(result.rows[0]).map(key => ({
+      wch: Math.min(Math.max(key.length + 3, 14), 25)
+    }));
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      dataSheet,
+      'Data Pengukuran'
+    );
+
+    // Unduh berkas Excel.
+    const date = new Date().toISOString().slice(0, 10);
+    const filename = `voltview-report-${range}-${date}.xlsx`;
+
+    XLSX.writeFile(workbook, filename);
+
+    showNotice(
+      `Laporan Excel berhasil dibuat: ${result.rows.length} data pengukuran.`,
+      'info'
+    );
+
+  } catch (error) {
+    console.error('Export error:', error);
+
+    showNotice(
+      error.message || 'Gagal mengekspor laporan Excel.',
+      'error'
+    );
+
+  } finally {
+    button.disabled = false;
+    button.innerHTML = originalHTML;
+  }
 });
+
 
 
   // Highlight active sidebar link when navigating to dashboard sections.
