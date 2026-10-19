@@ -2,6 +2,13 @@
 <?php
 ob_start();
 
+ini_set('display_errors', '0');
+error_reporting(E_ALL);
+
+// ==================================================
+// 1. VALIDASI REQUEST DAN KONFIGURASI
+// ==================================================
+
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     http_response_code(405);
     header('Allow: GET');
@@ -13,27 +20,13 @@ if (!class_exists('ZipArchive')) {
     exit('Ekstensi PHP ZipArchive tidak tersedia.');
 }
 
-// ==================================================
-// 1. KONFIGURASI API NEON MELALUI VERCEL
-// ==================================================
-
 $apiUrl = 'https://voltview.vercel.app/api/voltview';
 
-// Periode laporan.
 $ranges = [
     'day'   => 1,
     'week'  => 7,
     'month' => 30,
 ];
-
-$range = $_GET['range'] ?? 'day';
-
-if (!isset($ranges[$range])) {
-    http_response_code(400);
-    exit('Periode tidak valid.');
-}
-
-$days = $ranges[$range];
 
 $periodLabels = [
     'day'   => '24 jam terakhir',
@@ -41,17 +34,24 @@ $periodLabels = [
     'month' => '30 hari terakhir',
 ];
 
+$range = $_GET['range'] ?? 'day';
+
+if (!isset($ranges[$range])) {
+    http_response_code(400);
+    exit('Periode laporan tidak valid.');
+}
+
 // ==================================================
-// 2. AMBIL DATA DARI API VERCEL
+// 2. AMBIL DATA DARI VERCEL API
 // ==================================================
 
-// Endpoint Vercel harus mendukung mode export dan
-// mengembalikan array "rows" berisi data mentah.
-// Lihat perubahan api/voltview.js di bawah.
+$queryUrl = $apiUrl . '?' . http_build_query([
+    'export' => '1',
+    'range'  => $range,
+]);
 
-$queryUrl = $apiUrl
-    . '?export=1'
-    . '&range=' . urlencode($range);
+$responseBody = false;
+$httpStatus = 0;
 
 if (function_exists('curl_init')) {
     $ch = curl_init($queryUrl);
@@ -59,15 +59,15 @@ if (function_exists('curl_init')) {
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_CONNECTTIMEOUT => 10,
-        CURLOPT_TIMEOUT => 60,
-        CURLOPT_HTTPHEADER => [
-            'Accept: application/json'
+        CURLOPT_TIMEOUT        => 60,
+        CURLOPT_HTTPHEADER     => [
+            'Accept: application/json',
         ],
     ]);
 
     $responseBody = curl_exec($ch);
     $curlError = curl_error($ch);
-    $httpStatus = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $httpStatus = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
     curl_close($ch);
 
@@ -77,12 +77,11 @@ if (function_exists('curl_init')) {
         exit('Gagal menghubungi API VoltView.');
     }
 } else {
-    // Alternatif jika ekstensi cURL tidak tersedia.
     $context = stream_context_create([
         'http' => [
-            'method' => 'GET',
-            'timeout' => 60,
-            'header' => "Accept: application/json\r\n",
+            'method'        => 'GET',
+            'timeout'       => 60,
+            'header'        => "Accept: application/json\r\n",
             'ignore_errors' => true,
         ],
     ]);
@@ -92,8 +91,6 @@ if (function_exists('curl_init')) {
         false,
         $context
     );
-
-    $httpStatus = 0;
 
     if (isset($http_response_header)) {
         foreach ($http_response_header as $headerLine) {
@@ -114,10 +111,7 @@ if (function_exists('curl_init')) {
 }
 
 if ($httpStatus < 200 || $httpStatus >= 300) {
-    error_log(
-        'VoltView export API HTTP status: ' . $httpStatus
-    );
-
+    error_log('VoltView export API HTTP: ' . $httpStatus);
     http_response_code(502);
     exit('API VoltView gagal menyediakan data ekspor.');
 }
@@ -126,21 +120,31 @@ $payload = json_decode($responseBody, true);
 
 if (
     !is_array($payload) ||
-    !isset($payload['success']) ||
-    $payload['success'] !== true ||
+    ($payload['success'] ?? false) !== true ||
     !isset($payload['rows']) ||
     !is_array($payload['rows'])
 ) {
-    error_log('VoltView export: format respons API tidak valid.');
-
+    error_log('VoltView export: respons API tidak valid.');
     http_response_code(502);
     exit('Format data dari API VoltView tidak valid.');
 }
 
 $data = $payload['rows'];
 
+foreach ($data as $record) {
+    if (!is_array($record)) {
+        http_response_code(502);
+        exit('Struktur baris data tidak valid.');
+    }
+}
+
+if (count($data) === 0) {
+    http_response_code(404);
+    exit('Tidak ada data pada periode yang dipilih.');
+}
+
 // ==================================================
-// 3. DEFINISI KOLOM DAN LABEL EXCEL
+// 3. DEFINISI KOLOM DAN LABEL
 // ==================================================
 
 $columns = [
@@ -197,22 +201,15 @@ $labels = [
     'avg_load_percent'      => 'Beban Rata-rata (%)',
 ];
 
-// Validasi struktur baris dari API.
-foreach ($data as $record) {
-    if (!is_array($record)) {
-        http_response_code(502);
-        exit('Struktur baris data dari API tidak valid.');
-    }
-}
-
 // ==================================================
-// 4. HELPER XML DAN SEL EXCEL
+// 4. HELPER XML DAN EXCEL
 // ==================================================
 
 function xlsxEscape($value): string
 {
     $value = (string) ($value ?? '');
 
+    // Hapus karakter kontrol yang tidak valid untuk XML.
     $value = preg_replace(
         '/[\x00-\x08\x0B\x0C\x0E-\x1F]/',
         '',
@@ -232,9 +229,7 @@ function xlsxColumn(int $number): string
 
     while ($number > 0) {
         $remainder = ($number - 1) % 26;
-
         $letters = chr(65 + $remainder) . $letters;
-
         $number = intdiv($number - 1, 26);
     }
 
@@ -250,9 +245,9 @@ function xlsxCell(
 ): array {
     return [
         'ref' => xlsxColumn($column) . $row,
-        'v' => $value,
-        's' => $style,
-        't' => $type,
+        'v'   => $value,
+        's'   => $style,
+        't'   => $type,
     ];
 }
 
@@ -261,7 +256,17 @@ function xlsxSheetXml(
     int $maxColumn,
     array $options = []
 ): string {
-    $maxRow = max(1, max(array_keys($rows)));
+    if (empty($rows)) {
+        $rows = [
+            1 => [
+                xlsxCell(1, 1, ''),
+            ],
+        ];
+    }
+
+    ksort($rows);
+
+    $maxRow = max(array_keys($rows));
     $lastColumn = xlsxColumn($maxColumn);
 
     $xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
@@ -276,6 +281,7 @@ function xlsxSheetXml(
     if (!empty($options['freeze'])) {
         $xml .= '<pane ySplit="1" topLeftCell="A2" ';
         $xml .= 'activePane="bottomLeft" state="frozen"/>';
+        $xml .= '<selection pane="bottomLeft" activeCell="A2" sqref="A2"/>';
     }
 
     $xml .= '</sheetView></sheetViews>';
@@ -297,17 +303,26 @@ function xlsxSheetXml(
     $xml .= '<sheetData>';
 
     foreach ($rows as $rowNumber => $cells) {
-        $xml .= '<row r="' . $rowNumber . '">';
+        if ($rowNumber === 1 && !empty($options['titleRow'])) {
+            $height = 34;
+        } elseif ($rowNumber === 1 || $rowNumber === 3) {
+            $height = 26;
+        } else {
+            $height = 22;
+        }
+
+        $xml .= '<row r="' . $rowNumber . '" ht="' . $height . '" customHeight="1">';
 
         foreach ($cells as $cell) {
             $reference = $cell['ref'];
             $style = (int) $cell['s'];
             $value = $cell['v'];
+            $type = $cell['t'];
 
             $xml .= '<c r="' . $reference . '" s="' . $style . '"';
 
             if (
-                $cell['t'] === 'n' &&
+                $type === 'n' &&
                 $value !== null &&
                 $value !== '' &&
                 is_numeric($value)
@@ -365,8 +380,8 @@ $summaryRows[1] = [
 ];
 
 $summaryRows[3] = [
-    xlsxCell(1, 3, 'Informasi Laporan', 2),
-    xlsxCell(2, 3, 'Nilai', 2),
+    xlsxCell(1, 3, 'INFORMASI LAPORAN', 2),
+    xlsxCell(2, 3, 'KETERANGAN', 2),
 ];
 
 $summaryItems = [
@@ -381,26 +396,27 @@ foreach ($summaryItems as $index => $item) {
 
     $summaryRows[$rowNumber] = [
         xlsxCell(1, $rowNumber, $item[0], 3),
-        xlsxCell(2, $rowNumber, $item[1], 5, $item[2]),
+        xlsxCell(2, $rowNumber, $item[1], $item[2] === 'n' ? 7 : 5, $item[2]),
     ];
 }
 
-$summaryRows[9] = [
-    xlsxCell(1, 9, 'Catatan', 2),
-    xlsxCell(2, 9, 'Keterangan', 2),
-];
-
 $summaryRows[10] = [
-    xlsxCell(1, 10, 'Rentang data', 3),
-    xlsxCell(2, 10, 'Berdasarkan waktu pengukuran pada database.', 5),
+    xlsxCell(1, 10, 'CATATAN', 2),
+    xlsxCell(2, 10, 'KETERANGAN', 2),
 ];
 
 $summaryRows[11] = [
-    xlsxCell(1, 11, 'Urutan data', 3),
-    xlsxCell(2, 11, 'Waktu terlama ke waktu terbaru.', 5),
+    xlsxCell(1, 11, 'Rentang Data', 3),
+    xlsxCell(2, 11, 'Berdasarkan waktu pengukuran pada database.', 5),
+];
+
+$summaryRows[12] = [
+    xlsxCell(1, 12, 'Urutan Data', 3),
+    xlsxCell(2, 12, 'Data disajikan mengikuti urutan dari API.', 5),
 ];
 
 $summaryXml = xlsxSheetXml($summaryRows, 4, [
+    'titleRow' => true,
     'widths' => [
         1 => 28,
         2 => 48,
@@ -415,7 +431,6 @@ $summaryXml = xlsxSheetXml($summaryRows, 4, [
 // ==================================================
 
 $measurementRows = [];
-
 $headerCells = [];
 
 foreach ($columns as $index => $column) {
@@ -453,11 +468,20 @@ foreach ($data as $rowIndex => $record) {
             $type = 's';
         }
 
+        // Baris selang-seling untuk meningkatkan keterbacaan.
+        $alternate = ($excelRow % 2 === 0);
+
+        if ($type === 'n') {
+            $style = $alternate ? 8 : 7;
+        } else {
+            $style = $alternate ? 6 : 4;
+        }
+
         $cells[] = xlsxCell(
             $columnIndex + 1,
             $excelRow,
             $value,
-            4,
+            $style,
             $type
         );
     }
@@ -466,20 +490,38 @@ foreach ($data as $rowIndex => $record) {
 }
 
 $measurementWidths = [
-    1 => 10, 2 => 22, 3 => 15, 4 => 15,
-    5 => 18, 6 => 20, 7 => 17, 8 => 16,
-    9 => 18, 10 => 19, 11 => 19, 12 => 19,
-    13 => 19, 14 => 19, 15 => 17, 16 => 17,
-    17 => 17, 18 => 17, 19 => 20, 20 => 20,
-    21 => 22, 22 => 16, 23 => 21, 24 => 18,
+    1  => 9,
+    2  => 23,
+    3  => 15,
+    4  => 14,
+    5  => 18,
+    6  => 19,
+    7  => 16,
+    8  => 16,
+    9  => 17,
+    10 => 19,
+    11 => 19,
+    12 => 19,
+    13 => 19,
+    14 => 19,
+    15 => 19,
+    16 => 16,
+    17 => 16,
+    18 => 16,
+    19 => 16,
+    20 => 21,
+    21 => 20,
+    22 => 21,
+    23 => 15,
+    24 => 21,
 ];
 
 $measurementXml = xlsxSheetXml(
     $measurementRows,
     count($columns),
     [
-        'widths' => $measurementWidths,
-        'freeze' => true,
+        'widths'    => $measurementWidths,
+        'freeze'    => true,
         'autoFilter' => true,
     ]
 );
@@ -491,12 +533,12 @@ $measurementXml = xlsxSheetXml(
 $analysisRows = [];
 
 $analysisRows[1] = [
-    xlsxCell(1, 1, 'Parameter', 2),
-    xlsxCell(2, 1, 'Satuan', 2),
-    xlsxCell(3, 1, 'Minimum', 2),
-    xlsxCell(4, 1, 'Maksimum', 2),
-    xlsxCell(5, 1, 'Rata-rata', 2),
-    xlsxCell(6, 1, 'Jumlah Sampel', 2),
+    xlsxCell(1, 1, 'PARAMETER', 2),
+    xlsxCell(2, 1, 'SATUAN', 2),
+    xlsxCell(3, 1, 'MINIMUM', 2),
+    xlsxCell(4, 1, 'MAKSIMUM', 2),
+    xlsxCell(5, 1, 'RATA-RATA', 2),
+    xlsxCell(6, 1, 'JUMLAH SAMPEL', 2),
 ];
 
 $metrics = [
@@ -539,31 +581,35 @@ foreach ($metrics as $index => [$field, $name, $unit]) {
     $rowNumber = $index + 2;
     $count = count($values);
 
-    $min = $count ? min($values) : null;
-    $max = $count ? max($values) : null;
-    $avg = $count ? array_sum($values) / $count : null;
+    $min = $count > 0 ? min($values) : null;
+    $max = $count > 0 ? max($values) : null;
+    $avg = $count > 0 ? array_sum($values) / $count : null;
+
+    $alternate = ($rowNumber % 2 === 0);
+    $textStyle = $alternate ? 6 : 4;
+    $numberStyle = $alternate ? 8 : 7;
 
     $analysisRows[$rowNumber] = [
-        xlsxCell(1, $rowNumber, $name, 5),
-        xlsxCell(2, $rowNumber, $unit, 5),
-        xlsxCell(3, $rowNumber, $min, 4, 'n'),
-        xlsxCell(4, $rowNumber, $max, 4, 'n'),
-        xlsxCell(5, $rowNumber, $avg, 4, 'n'),
-        xlsxCell(6, $rowNumber, $count, 4, 'n'),
+        xlsxCell(1, $rowNumber, $name, 3),
+        xlsxCell(2, $rowNumber, $unit, $textStyle),
+        xlsxCell(3, $rowNumber, $min, $numberStyle, 'n'),
+        xlsxCell(4, $rowNumber, $max, $numberStyle, 'n'),
+        xlsxCell(5, $rowNumber, $avg, $numberStyle, 'n'),
+        xlsxCell(6, $rowNumber, $count, $textStyle, 'n'),
     ];
 }
 
 $analysisXml = xlsxSheetXml($analysisRows, 6, [
+    'freeze' => true,
+    'autoFilter' => true,
     'widths' => [
-        1 => 25,
+        1 => 27,
         2 => 15,
         3 => 18,
         4 => 18,
         5 => 18,
         6 => 20,
     ],
-    'freeze' => true,
-    'autoFilter' => true,
 ]);
 
 // ==================================================
@@ -573,17 +619,26 @@ $analysisXml = xlsxSheetXml($analysisRows, 6, [
 $stylesXml = <<<'XML'
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <fonts count="3">
-    <font><sz val="11"/><name val="Arial"/></font>
+
+  <numFmts count="1">
+    <numFmt numFmtId="164" formatCode="#,##0.00;[Red]-#,##0.00"/>
+  </numFmts>
+
+  <fonts count="4">
+    <font><sz val="10"/><name val="Arial"/><color rgb="FF243247"/></font>
     <font><b/><sz val="16"/><color rgb="FFFFFFFF"/><name val="Arial"/></font>
     <font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/></font>
+    <font><b/><sz val="10"/><color rgb="FF142D4E"/><name val="Arial"/></font>
   </fonts>
-  <fills count="4">
+
+  <fills count="5">
     <fill><patternFill patternType="none"/></fill>
     <fill><patternFill patternType="gray125"/></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FF142D4E"/><bgColor indexed="64"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FF167D68"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFF0F6FA"/><bgColor indexed="64"/></patternFill></fill>
   </fills>
+
   <borders count="2">
     <border><left/><right/><top/><bottom/><diagonal/></border>
     <border>
@@ -594,22 +649,27 @@ $stylesXml = <<<'XML'
       <diagonal/>
     </border>
   </borders>
+
   <cellStyleXfs count="1">
     <xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>
   </cellStyleXfs>
-  <cellXfs count="6">
+
+  <cellXfs count="9">
     <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
-    <xf numFmtId="0" fontId="1" fillId="2" borderId="0" applyAlignment="1" xfId="0"><alignment vertical="center"/></xf>
-    <xf numFmtId="0" fontId="2" fillId="3" borderId="1" applyAlignment="1" xfId="0"><alignment vertical="center" horizontal="center" wrapText="1"/></xf>
-    <xf numFmtId="0" fontId="2" fillId="3" borderId="1" applyAlignment="1" xfId="0"><alignment vertical="center"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyAlignment="1" xfId="0"><alignment vertical="center"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyAlignment="1" xfId="0"><alignment vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="center" horizontal="left"/></xf>
+    <xf numFmtId="0" fontId="2" fillId="3" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="center" horizontal="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="3" fillId="4" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="center"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="4" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="center"/></xf>
+    <xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="center" horizontal="right"/></xf>
+    <xf numFmtId="164" fontId="0" fillId="4" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="center" horizontal="right"/></xf>
   </cellXfs>
 </styleSheet>
 XML;
 
 // ==================================================
-// 9. SUSUN FILE XLSX
+// 9. SUSUN KOMPONEN WORKBOOK XLSX
 // ==================================================
 
 $workbookXml = <<<'XML'
@@ -655,6 +715,10 @@ $contentTypes = <<<'XML'
 </Types>
 XML;
 
+// ==================================================
+// 10. BUAT FILE XLSX
+// ==================================================
+
 $tempFile = tempnam(sys_get_temp_dir(), 'voltview_');
 
 if ($tempFile === false) {
@@ -672,18 +736,18 @@ $opened = $zip->open(
 if ($opened !== true) {
     @unlink($tempFile);
     http_response_code(500);
-    exit('Gagal membuat berkas Excel.');
+    exit('Gagal membuat file Excel.');
 }
 
 $files = [
-    '[Content_Types].xml' => $contentTypes,
-    '_rels/.rels' => $rootRels,
-    'xl/workbook.xml' => $workbookXml,
-    'xl/_rels/workbook.xml.rels' => $workbookRels,
-    'xl/styles.xml' => $stylesXml,
-    'xl/worksheets/sheet1.xml' => $summaryXml,
-    'xl/worksheets/sheet2.xml' => $measurementXml,
-    'xl/worksheets/sheet3.xml' => $analysisXml,
+    '[Content_Types].xml'         => $contentTypes,
+    '_rels/.rels'                 => $rootRels,
+    'xl/workbook.xml'             => $workbookXml,
+    'xl/_rels/workbook.xml.rels'  => $workbookRels,
+    'xl/styles.xml'               => $stylesXml,
+    'xl/worksheets/sheet1.xml'    => $summaryXml,
+    'xl/worksheets/sheet2.xml'    => $measurementXml,
+    'xl/worksheets/sheet3.xml'    => $analysisXml,
 ];
 
 foreach ($files as $path => $contents) {
@@ -702,7 +766,7 @@ if (!$zip->close()) {
 }
 
 // ==================================================
-// 10. KIRIM FILE EXCEL
+// 11. KIRIM FILE EXCEL KE BROWSER
 // ==================================================
 
 if (!is_file($tempFile) || filesize($tempFile) === 0) {
@@ -711,20 +775,21 @@ if (!is_file($tempFile) || filesize($tempFile) === 0) {
     exit('File Excel kosong atau gagal dibuat.');
 }
 
+$fileSize = filesize($tempFile);
+$date = date('Y-m-d');
+$filename = 'voltview-report-' . $range . '-' . $date . '.xlsx';
+
+// Hapus seluruh output buffer agar file tidak rusak.
 while (ob_get_level() > 0) {
     ob_end_clean();
 }
 
-header(
-    'Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-);
-
-header(
-    'Content-Disposition: attachment; filename="voltview-report.xlsx"'
-);
-
-header('Content-Length: ' . filesize($tempFile));
-header('Cache-Control: no-store');
+header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+header('Content-Disposition: attachment; filename="' . $filename . '"');
+header('Content-Length: ' . $fileSize);
+header('Cache-Control: no-store, no-cache, must-revalidate');
+header('Pragma: no-cache');
+header('X-Content-Type-Options: nosniff');
 
 readfile($tempFile);
 
