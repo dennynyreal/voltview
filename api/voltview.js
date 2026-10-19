@@ -3,12 +3,19 @@ const { neon } = require("@neondatabase/serverless");
 
 const sql = neon(process.env.DATABASE_URL);
 
-// Domain yang diizinkan mengakses API dari browser.
+// =============================================
+// 1. KONFIGURASI CORS
+// =============================================
+
 const allowedOrigins = [
   "https://autoshipsmrc.site.je",
   "http://localhost",
   "http://127.0.0.1"
 ];
+
+// =============================================
+// 2. HELPER
+// =============================================
 
 const numberOrNull = (value) => {
   if (
@@ -63,6 +70,7 @@ const average = (values) => {
   );
 };
 
+// Mengubah satu baris database menjadi data dashboard.
 const readRow = (row) => {
   const n = (key) => numberOrNull(row[key]);
 
@@ -137,8 +145,15 @@ const readRow = (row) => {
   };
 };
 
+// =============================================
+// 3. API UTAMA
+// =============================================
+
 module.exports = async (req, res) => {
-  // CORS untuk dashboard lokal dan online.
+  // ---------------------------------------------
+  // CORS: Dashboard lokal dan website online
+  // ---------------------------------------------
+
   const origin = req.headers.origin;
 
   if (allowedOrigins.includes(origin)) {
@@ -162,15 +177,16 @@ module.exports = async (req, res) => {
 
   res.setHeader("Cache-Control", "no-store");
 
-  // Menangani preflight request dari browser.
+  // Preflight request browser.
   if (req.method === "OPTIONS") {
     return res.status(204).end();
   }
 
   try {
     // =========================================
-    // POST: Menerima data dari ESP32
+    // POST: MENYIMPAN DATA ESP32 KE NEON
     // =========================================
+
     if (req.method === "POST") {
       const body = req.body;
 
@@ -253,13 +269,64 @@ module.exports = async (req, res) => {
     }
 
     // =========================================
-    // GET: Mengambil data untuk dashboard
+    // GET: DASHBOARD DAN EKSPOR EXCEL
     // =========================================
+
     if (req.method === "GET") {
+      // -----------------------------------------
+      // MODE EKSPOR
+      // Contoh:
+      // ?export=1&range=day
+      // ?export=1&range=week
+      // ?export=1&range=month
+      // -----------------------------------------
+
+      if (req.query.export === "1") {
+        const range = req.query.range || "day";
+
+        const rangeDays = {
+          day: 1,
+          week: 7,
+          month: 30
+        };
+
+        const days = rangeDays[range];
+
+        if (!days) {
+          return res.status(400).json({
+            success: false,
+            message: "Periode ekspor tidak valid."
+          });
+        }
+
+        const rows = await sql`
+          SELECT *
+          FROM energy_readings
+          WHERE measured_at >=
+            NOW() - (${days} * INTERVAL '1 day')
+          ORDER BY measured_at ASC, id ASC
+          LIMIT 50000
+        `;
+
+        return res.status(200).json({
+          success: true,
+          export: true,
+          range,
+          count: rows.length,
+          limit: 50000,
+          rows
+        });
+      }
+
+      // -----------------------------------------
+      // MODE DASHBOARD
+      // Mengambil maksimal 100 data terbaru.
+      // -----------------------------------------
+
       const rows = await sql`
         SELECT *
         FROM energy_readings
-        ORDER BY measured_at DESC
+        ORDER BY measured_at DESC, id DESC
         LIMIT 100
       `;
 
@@ -284,7 +351,9 @@ module.exports = async (req, res) => {
 
           return {
             timestamp: row.measured_at,
+
             voltage: numberOrNull(row.voltage),
+
             current_a: numberOrNull(row.current_a),
 
             active_kw:
@@ -301,13 +370,17 @@ module.exports = async (req, res) => {
       return res.status(200).json(latest);
     }
 
-    // Metode selain GET, POST, dan OPTIONS ditolak.
+    // =========================================
+    // METODE LAIN DITOLAK
+    // =========================================
+
     res.setHeader("Allow", "GET, POST, OPTIONS");
 
     return res.status(405).json({
       success: false,
       message: "Metode tidak didukung."
     });
+
   } catch (error) {
     console.error("VoltView API error:", error);
 
