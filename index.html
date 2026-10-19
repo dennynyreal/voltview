@@ -398,8 +398,14 @@ function validatePayload(data) {
         method: 'GET', headers: { 'Accept': 'application/json' }, cache: 'no-store', signal: controller.signal
       });
       if (!response.ok) throw new Error(`HTTP ${response.status} dari endpoint API.`);
-      const data = validatePayload(await response.json());
-      return data;
+const raw = await response.json();
+
+// API berhasil, tetapi belum ada data pengukuran.
+if (raw.data_available === false) {
+  return null;
+}
+
+return validatePayload(raw);
     } catch (error) {
       if (error.name === 'AbortError') throw new Error('Permintaan API melewati batas waktu 8 detik.');
       throw error;
@@ -408,27 +414,61 @@ function validatePayload(data) {
     }
   }
 
-  function setConnectionState(state, message = '') {
-    const dot = $('statusDot');
-    const label = $('connectionLabel');
-    const badge = $('apiBadge');
-    dot.className = 'h-2 w-2 rounded-full';
-    badge.className = 'inline-flex w-fit items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-bold';
-    if (state === 'demo') {
-      dot.classList.add('bg-amber-400'); label.textContent = 'Mode simulasi';
-      badge.classList.add('bg-amber-50', 'text-amber-700'); badge.innerHTML = '<span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>Mode simulasi';
-      $('demoNotice').classList.remove('hidden'); $('modeBtnLabel').textContent = 'Connect API';
-    } else if (state === 'online') {
-      dot.classList.add('bg-emerald-500', 'status-dot'); label.textContent = 'API terhubung';
-      badge.classList.add('bg-emerald-50', 'text-emerald-700'); badge.innerHTML = '<span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>API terhubung';
-      $('demoNotice').classList.add('hidden'); $('modeBtnLabel').textContent = 'Mode demo';
-    } else {
-      dot.classList.add('bg-rose-500'); label.textContent = 'API bermasalah';
-      badge.classList.add('bg-rose-50', 'text-rose-700'); badge.innerHTML = '<span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>Koneksi gagal';
-      $('modeBtnLabel').textContent = 'Mode demo';
-    }
-    if (message) showNotice(message, state === 'error' ? 'error' : 'info');
+  
+function setConnectionState(state, message = '') {
+  const dot = $('statusDot');
+  const label = $('connectionLabel');
+  const badge = $('apiBadge');
+
+  dot.className = 'h-2 w-2 rounded-full';
+  badge.className = 'inline-flex w-fit items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-bold';
+
+  if (state === 'demo') {
+    dot.classList.add('bg-amber-400');
+    label.textContent = 'Mode simulasi';
+
+    badge.classList.add('bg-amber-50', 'text-amber-700');
+    badge.innerHTML = '<span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>Mode simulasi';
+
+    $('demoNotice').classList.remove('hidden');
+    $('modeBtnLabel').textContent = 'Connect API';
+
+  } else if (state === 'online') {
+    dot.classList.add('bg-emerald-500', 'status-dot');
+    label.textContent = 'API terhubung';
+
+    badge.classList.add('bg-emerald-50', 'text-emerald-700');
+    badge.innerHTML = '<span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>API terhubung';
+
+    $('demoNotice').classList.add('hidden');
+    $('modeBtnLabel').textContent = 'Mode demo';
+
+  } else if (state === 'empty') {
+    dot.classList.add('bg-amber-400');
+    label.textContent = 'Menunggu data';
+
+    badge.classList.add('bg-amber-50', 'text-amber-700');
+    badge.innerHTML = '<span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>Belum ada data';
+
+    $('demoNotice').classList.add('hidden');
+    $('modeBtnLabel').textContent = 'Mode demo';
+
+  } else {
+    dot.classList.add('bg-rose-500');
+    label.textContent = 'API bermasalah';
+
+    badge.classList.add('bg-rose-50', 'text-rose-700');
+    badge.innerHTML = '<span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>Koneksi gagal';
+
+    $('demoNotice').classList.add('hidden');
+    $('modeBtnLabel').textContent = 'Mode demo';
   }
+
+  if (message) {
+    showNotice(message, state === 'error' ? 'error' : 'info');
+  }
+}
+
 
   function showNotice(message, type = 'info') {
     const el = $('notice');
@@ -567,25 +607,47 @@ function clearMetrics() {
     const btn = $('refreshBtn'); const icon = $('refreshIcon');
     btn.disabled = true; btn.classList.add('opacity-70'); icon.classList.add('animate-spin');
     hideNotice();
-    try {
-      const data = await getData();
-      latestData = data;
-      renderMetrics(data);
-      renderChart(data.history, DEMO_MODE);
-      setConnectionState(DEMO_MODE ? 'demo' : 'online');
-    } catch (error) {
+
+try {
+  const data = await getData();
+
+  if (data === null) {
+    latestData = null;
+
+    clearMetrics();
+    renderChart([], false);
+    setConnectionState('empty');
+
+    showNotice(
+      'Belum ada data pengukuran. Dashboard akan diperbarui saat data tersedia.',
+      'info'
+    );
+
+    return;
+  }
+
+  latestData = data;
+  renderMetrics(data);
+  renderChart(data.history, DEMO_MODE);
+  setConnectionState(DEMO_MODE ? 'demo' : 'online');
+
+} catch (error) {
   setConnectionState('error');
   latestData = null;
   clearMetrics();
   renderChart([], false);
 
   showNotice(
-    `Gagal mengambil data dari ${API_URL}: ${error.message} Pastikan endpoint PHP aktif dan mengembalikan JSON sesuai kontrak data.`,
+    `Gagal mengambil data dari ${API_URL}: ${error.message}`,
     'error'
   );
+
 } finally {
-      btn.disabled = false; btn.classList.remove('opacity-70'); icon.classList.remove('animate-spin');
-    }
+  btn.disabled = false;
+  btn.classList.remove('opacity-70');
+  icon.classList.remove('animate-spin');
+}
+
   }
 
   function scheduleRefresh() {
