@@ -1,7 +1,6 @@
+
 <?php
 ob_start();
-
-require_once __DIR__ . '/db.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     http_response_code(405);
@@ -14,16 +13,13 @@ if (!class_exists('ZipArchive')) {
     exit('Ekstensi PHP ZipArchive tidak tersedia.');
 }
 
-if (!isset($conn) || !($conn instanceof mysqli)) {
-    error_log('VoltView export: koneksi MySQLi $conn tidak tersedia.');
-    http_response_code(500);
-    exit('Koneksi database tidak tersedia.');
-}
+// ==================================================
+// 1. KONFIGURASI API NEON MELALUI VERCEL
+// ==================================================
 
-// --------------------------------------------------
-// 1. Filter periode
-// --------------------------------------------------
+$apiUrl = 'https://voltview.vercel.app/api/voltview';
 
+// Periode laporan.
 $ranges = [
     'day'   => 1,
     'week'  => 7,
@@ -45,9 +41,107 @@ $periodLabels = [
     'month' => '30 hari terakhir',
 ];
 
-// --------------------------------------------------
-// 2. Ambil seluruh kolom energy_readings
-// --------------------------------------------------
+// ==================================================
+// 2. AMBIL DATA DARI API VERCEL
+// ==================================================
+
+// Endpoint Vercel harus mendukung mode export dan
+// mengembalikan array "rows" berisi data mentah.
+// Lihat perubahan api/voltview.js di bawah.
+
+$queryUrl = $apiUrl
+    . '?export=1'
+    . '&range=' . urlencode($range);
+
+if (function_exists('curl_init')) {
+    $ch = curl_init($queryUrl);
+
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => 60,
+        CURLOPT_HTTPHEADER => [
+            'Accept: application/json'
+        ],
+    ]);
+
+    $responseBody = curl_exec($ch);
+    $curlError = curl_error($ch);
+    $httpStatus = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+    curl_close($ch);
+
+    if ($responseBody === false) {
+        error_log('VoltView export cURL: ' . $curlError);
+        http_response_code(502);
+        exit('Gagal menghubungi API VoltView.');
+    }
+} else {
+    // Alternatif jika ekstensi cURL tidak tersedia.
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'GET',
+            'timeout' => 60,
+            'header' => "Accept: application/json\r\n",
+            'ignore_errors' => true,
+        ],
+    ]);
+
+    $responseBody = @file_get_contents(
+        $queryUrl,
+        false,
+        $context
+    );
+
+    $httpStatus = 0;
+
+    if (isset($http_response_header)) {
+        foreach ($http_response_header as $headerLine) {
+            if (preg_match(
+                '/^HTTP\/\S+\s+(\d+)/',
+                $headerLine,
+                $matches
+            )) {
+                $httpStatus = (int) $matches[1];
+            }
+        }
+    }
+
+    if ($responseBody === false) {
+        http_response_code(502);
+        exit('Gagal menghubungi API VoltView.');
+    }
+}
+
+if ($httpStatus < 200 || $httpStatus >= 300) {
+    error_log(
+        'VoltView export API HTTP status: ' . $httpStatus
+    );
+
+    http_response_code(502);
+    exit('API VoltView gagal menyediakan data ekspor.');
+}
+
+$payload = json_decode($responseBody, true);
+
+if (
+    !is_array($payload) ||
+    !isset($payload['success']) ||
+    $payload['success'] !== true ||
+    !isset($payload['rows']) ||
+    !is_array($payload['rows'])
+) {
+    error_log('VoltView export: format respons API tidak valid.');
+
+    http_response_code(502);
+    exit('Format data dari API VoltView tidak valid.');
+}
+
+$data = $payload['rows'];
+
+// ==================================================
+// 3. DEFINISI KOLOM DAN LABEL EXCEL
+// ==================================================
 
 $columns = [
     'id',
@@ -77,62 +171,48 @@ $columns = [
 ];
 
 $labels = [
-    'id'                  => 'ID',
-    'measured_at'         => 'Waktu Pengukuran',
-    'voltage'             => 'Tegangan (V)',
-    'current_a'           => 'Arus (A)',
-    'power_w'             => 'Daya Aktif (W)',
-    'energy_kwh'          => 'Energi Aktif (kWh)',
-    'frequency_hz'        => 'Frekuensi (Hz)',
-    'power_factor'        => 'Faktor Daya',
-    'source'              => 'Sumber Data',
-    'voltage_ln_r'        => 'Tegangan L-N R (V)',
-    'voltage_ln_s'        => 'Tegangan L-N S (V)',
-    'voltage_ln_t'        => 'Tegangan L-N T (V)',
-    'voltage_ll_rs'       => 'Tegangan L-L RS (V)',
-    'voltage_ll_st'       => 'Tegangan L-L ST (V)',
-    'voltage_ll_tr'       => 'Tegangan L-L TR (V)',
-    'current_r'           => 'Arus Fasa R (A)',
-    'current_s'           => 'Arus Fasa S (A)',
-    'current_t'           => 'Arus Fasa T (A)',
-    'current_n'           => 'Arus Netral (A)',
-    'reactive_power_kvar' => 'Daya Reaktif (kvar)',
-    'apparent_power_kva'  => 'Daya Semu (kVA)',
+    'id'                    => 'ID',
+    'measured_at'           => 'Waktu Pengukuran',
+    'voltage'               => 'Tegangan (V)',
+    'current_a'             => 'Arus (A)',
+    'power_w'               => 'Daya Aktif (W)',
+    'energy_kwh'            => 'Energi Aktif (kWh)',
+    'frequency_hz'          => 'Frekuensi (Hz)',
+    'power_factor'          => 'Faktor Daya',
+    'source'                => 'Sumber Data',
+    'voltage_ln_r'          => 'Tegangan L-N R (V)',
+    'voltage_ln_s'          => 'Tegangan L-N S (V)',
+    'voltage_ln_t'          => 'Tegangan L-N T (V)',
+    'voltage_ll_rs'         => 'Tegangan L-L RS (V)',
+    'voltage_ll_st'         => 'Tegangan L-L ST (V)',
+    'voltage_ll_tr'         => 'Tegangan L-L TR (V)',
+    'current_r'             => 'Arus Fasa R (A)',
+    'current_s'             => 'Arus Fasa S (A)',
+    'current_t'             => 'Arus Fasa T (A)',
+    'current_n'             => 'Arus Netral (A)',
+    'reactive_power_kvar'   => 'Daya Reaktif (kvar)',
+    'apparent_power_kva'    => 'Daya Semu (kVA)',
     'reactive_energy_kvarh' => 'Energi Reaktif (kvarh)',
-    'run_hours'           => 'Jam Operasi',
-    'avg_load_percent'    => 'Beban Rata-rata (%)',
+    'run_hours'             => 'Jam Operasi',
+    'avg_load_percent'      => 'Beban Rata-rata (%)',
 ];
 
-$sql = 'SELECT ' . implode(', ', $columns) . "
-        FROM energy_readings
-        WHERE measured_at >= NOW() - INTERVAL {$days} DAY
-        ORDER BY measured_at ASC, id ASC";
-
-$result = $conn->query($sql);
-
-if (!$result) {
-    error_log('VoltView export SQL: ' . $conn->error);
-    http_response_code(500);
-    exit('Gagal mengambil data pengukuran.');
+// Validasi struktur baris dari API.
+foreach ($data as $record) {
+    if (!is_array($record)) {
+        http_response_code(502);
+        exit('Struktur baris data dari API tidak valid.');
+    }
 }
 
-$data = [];
-
-while ($record = $result->fetch_assoc()) {
-    $data[] = $record;
-}
-
-$result->free();
-
-// --------------------------------------------------
-// 3. Helper XML dan sel Excel
-// --------------------------------------------------
+// ==================================================
+// 4. HELPER XML DAN SEL EXCEL
+// ==================================================
 
 function xlsxEscape($value): string
 {
     $value = (string) ($value ?? '');
 
-    // Hilangkan karakter kontrol yang tidak valid dalam XML.
     $value = preg_replace(
         '/[\x00-\x08\x0B\x0C\x0E-\x1F]/',
         '',
@@ -152,20 +232,15 @@ function xlsxColumn(int $number): string
 
     while ($number > 0) {
         $remainder = ($number - 1) % 26;
+
         $letters = chr(65 + $remainder) . $letters;
+
         $number = intdiv($number - 1, 26);
     }
 
     return $letters;
 }
 
-/**
- * Sel berbentuk:
- * ['v' => nilai, 's' => indeks style, 't' => 's' atau 'n']
- *
- * t=s: teks inline
- * t=n: angka
- */
 function xlsxCell(
     int $column,
     int $row,
@@ -186,10 +261,11 @@ function xlsxSheetXml(
     int $maxColumn,
     array $options = []
 ): string {
-$maxRow = max(1, max(array_keys($rows)));
+    $maxRow = max(1, max(array_keys($rows)));
     $lastColumn = xlsxColumn($maxColumn);
 
     $xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+
     $xml .= '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ';
     $xml .= 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">';
 
@@ -203,7 +279,6 @@ $maxRow = max(1, max(array_keys($rows)));
     }
 
     $xml .= '</sheetView></sheetViews>';
-
     $xml .= '<sheetFormatPr defaultRowHeight="20"/>';
 
     if (!empty($options['widths'])) {
@@ -222,13 +297,7 @@ $maxRow = max(1, max(array_keys($rows)));
     $xml .= '<sheetData>';
 
     foreach ($rows as $rowNumber => $cells) {
-        $xml .= '<row r="' . $rowNumber . '"';
-
-        if ($rowNumber === 1 && !empty($options['titleHeight'])) {
-            $xml .= ' ht="' . (float) $options['titleHeight'] . '" customHeight="1"';
-        }
-
-        $xml .= '>';
+        $xml .= '<row r="' . $rowNumber . '">';
 
         foreach ($cells as $cell) {
             $reference = $cell['ref'];
@@ -237,7 +306,12 @@ $maxRow = max(1, max(array_keys($rows)));
 
             $xml .= '<c r="' . $reference . '" s="' . $style . '"';
 
-            if ($cell['t'] === 'n' && $value !== null && $value !== '') {
+            if (
+                $cell['t'] === 'n' &&
+                $value !== null &&
+                $value !== '' &&
+                is_numeric($value)
+            ) {
                 $xml .= '><v>' . xlsxEscape($value) . '</v></c>';
             } elseif ($value === null || $value === '') {
                 $xml .= '/>';
@@ -275,14 +349,19 @@ $maxRow = max(1, max(array_keys($rows)));
     return $xml;
 }
 
-// --------------------------------------------------
-// 4. Ringkasan laporan
-// --------------------------------------------------
+// ==================================================
+// 5. SHEET RINGKASAN
+// ==================================================
 
 $summaryRows = [];
 
 $summaryRows[1] = [
-    xlsxCell(1, 1, 'VOLT VIEW | LAPORAN PENGUKURAN ENERGI', 1),
+    xlsxCell(
+        1,
+        1,
+        'VOLT VIEW | LAPORAN PENGUKURAN ENERGI',
+        1
+    ),
 ];
 
 $summaryRows[3] = [
@@ -294,7 +373,7 @@ $summaryItems = [
     ['Periode', $periodLabels[$range], 's'],
     ['Waktu Ekspor', date('Y-m-d H:i:s'), 's'],
     ['Jumlah Sampel', count($data), 'n'],
-    ['Sumber Data', 'Database energy_readings', 's'],
+    ['Sumber Data', 'Neon PostgreSQL melalui API Vercel', 's'],
 ];
 
 foreach ($summaryItems as $index => $item) {
@@ -322,14 +401,18 @@ $summaryRows[11] = [
 ];
 
 $summaryXml = xlsxSheetXml($summaryRows, 4, [
-    'widths' => [1 => 28, 2 => 48, 3 => 15, 4 => 15],
+    'widths' => [
+        1 => 28,
+        2 => 48,
+        3 => 15,
+        4 => 15,
+    ],
     'merges' => ['A1:D1'],
-    'titleHeight' => 32,
 ]);
 
-// --------------------------------------------------
-// 5. Data pengukuran
-// --------------------------------------------------
+// ==================================================
+// 6. SHEET DATA PENGUKURAN
+// ==================================================
 
 $measurementRows = [];
 
@@ -352,6 +435,7 @@ foreach ($data as $rowIndex => $record) {
 
     foreach ($columns as $columnIndex => $column) {
         $value = $record[$column] ?? null;
+
         $isText = in_array(
             $column,
             ['measured_at', 'source'],
@@ -400,9 +484,9 @@ $measurementXml = xlsxSheetXml(
     ]
 );
 
-// --------------------------------------------------
-// 6. Analisis statistik
-// --------------------------------------------------
+// ==================================================
+// 7. SHEET ANALISIS STATISTIK
+// ==================================================
 
 $analysisRows = [];
 
@@ -457,30 +541,34 @@ foreach ($metrics as $index => [$field, $name, $unit]) {
 
     $min = $count ? min($values) : null;
     $max = $count ? max($values) : null;
-    $average = $count ? array_sum($values) / $count : null;
+    $avg = $count ? array_sum($values) / $count : null;
 
     $analysisRows[$rowNumber] = [
         xlsxCell(1, $rowNumber, $name, 5),
         xlsxCell(2, $rowNumber, $unit, 5),
         xlsxCell(3, $rowNumber, $min, 4, 'n'),
         xlsxCell(4, $rowNumber, $max, 4, 'n'),
-        xlsxCell(5, $rowNumber, $average, 4, 'n'),
+        xlsxCell(5, $rowNumber, $avg, 4, 'n'),
         xlsxCell(6, $rowNumber, $count, 4, 'n'),
     ];
 }
 
 $analysisXml = xlsxSheetXml($analysisRows, 6, [
     'widths' => [
-        1 => 25, 2 => 15, 3 => 18,
-        4 => 18, 5 => 18, 6 => 20,
+        1 => 25,
+        2 => 15,
+        3 => 18,
+        4 => 18,
+        5 => 18,
+        6 => 20,
     ],
     'freeze' => true,
     'autoFilter' => true,
 ]);
 
-// --------------------------------------------------
-// 7. Styles workbook
-// --------------------------------------------------
+// ==================================================
+// 8. STYLES WORKBOOK
+// ==================================================
 
 $stylesXml = <<<'XML'
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -511,28 +599,18 @@ $stylesXml = <<<'XML'
   </cellStyleXfs>
   <cellXfs count="6">
     <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
-    <xf numFmtId="0" fontId="1" fillId="2" borderId="0" applyAlignment="1" xfId="0">
-      <alignment vertical="center"/>
-    </xf>
-    <xf numFmtId="0" fontId="2" fillId="3" borderId="1" applyAlignment="1" xfId="0">
-      <alignment vertical="center" horizontal="center" wrapText="1"/>
-    </xf>
-    <xf numFmtId="0" fontId="2" fillId="3" borderId="1" applyAlignment="1" xfId="0">
-      <alignment vertical="center"/>
-    </xf>
-    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyAlignment="1" xfId="0">
-      <alignment vertical="center"/>
-    </xf>
-    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyAlignment="1" xfId="0">
-      <alignment vertical="center" wrapText="1"/>
-    </xf>
+    <xf numFmtId="0" fontId="1" fillId="2" borderId="0" applyAlignment="1" xfId="0"><alignment vertical="center"/></xf>
+    <xf numFmtId="0" fontId="2" fillId="3" borderId="1" applyAlignment="1" xfId="0"><alignment vertical="center" horizontal="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="2" fillId="3" borderId="1" applyAlignment="1" xfId="0"><alignment vertical="center"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyAlignment="1" xfId="0"><alignment vertical="center"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyAlignment="1" xfId="0"><alignment vertical="center" wrapText="1"/></xf>
   </cellXfs>
 </styleSheet>
 XML;
 
-// --------------------------------------------------
-// 8. Susun paket XLSX
-// --------------------------------------------------
+// ==================================================
+// 9. SUSUN FILE XLSX
+// ==================================================
 
 $workbookXml = <<<'XML'
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -585,7 +663,11 @@ if ($tempFile === false) {
 }
 
 $zip = new ZipArchive();
-$opened = $zip->open($tempFile, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+
+$opened = $zip->open(
+    $tempFile,
+    ZipArchive::CREATE | ZipArchive::OVERWRITE
+);
 
 if ($opened !== true) {
     @unlink($tempFile);
@@ -619,9 +701,9 @@ if (!$zip->close()) {
     exit('Gagal menyelesaikan file Excel.');
 }
 
-// --------------------------------------------------
-// 9. Kirim file unduhan
-// --------------------------------------------------
+// ==================================================
+// 10. KIRIM FILE EXCEL
+// ==================================================
 
 if (!is_file($tempFile) || filesize($tempFile) === 0) {
     @unlink($tempFile);
@@ -629,16 +711,22 @@ if (!is_file($tempFile) || filesize($tempFile) === 0) {
     exit('File Excel kosong atau gagal dibuat.');
 }
 
-// Bersihkan seluruh buffer agar file XLSX dimulai dengan byte ZIP.
 while (ob_get_level() > 0) {
     ob_end_clean();
 }
 
-header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-header('Content-Disposition: attachment; filename="voltview-report.xlsx"');
+header(
+    'Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+);
+
+header(
+    'Content-Disposition: attachment; filename="voltview-report.xlsx"'
+);
+
 header('Content-Length: ' . filesize($tempFile));
 header('Cache-Control: no-store');
 
 readfile($tempFile);
+
 @unlink($tempFile);
 exit;
