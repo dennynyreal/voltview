@@ -10,12 +10,9 @@
 const char* ssid = "67";
 const char* password = "predatorcerr";
 
-// =====================================================
-// 2. API VOLTVIEW
-// Ganti IP contoh dengan IPv4 komputer dari ipconfig.
-// =====================================================
+// 2. ALAMAT API VOLTVIEW
 const char* serverURL =
-  "http://10.16.159.79/voltview/api/energy.php";
+  "https://voltview.vercel.app/api/voltview";
 
 // =====================================================
 // 3. KONFIGURASI MODBUS PM2100
