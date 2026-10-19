@@ -1,7 +1,7 @@
 
 <?php
 
-require_once __DIR__ . '/db.php';
+const VERCEL_API_URL = 'https://voltview.vercel.app/api/voltview';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -265,151 +265,61 @@ $numericFields = [
 */
 
 if ($method === 'GET') {
+    $query = [];
 
-    // Rentang waktu grafik historis.
-    $range = $_GET['range'] ?? 'day';
+    if (isset($_GET['range'])) {
+        $range = (string) $_GET['range'];
 
-    switch ($range) {
-        case 'week':
-            $days = 7;
-            $limit = 1200;
-            break;
+        if (!in_array($range, ['day', 'week', 'month'], true)) {
+            http_response_code(400);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Periode tidak valid.'
+            ]);
+            exit;
+        }
 
-        case 'month':
-            $days = 30;
-            $limit = 5000;
-            break;
-
-        default:
-            $days = 1;
-            $limit = 200;
-            break;
+        $query['range'] = $range;
     }
 
-    // 1. Ambil data real-time terakhir dari file sementara.
-    $state = readEnergyState($stateFile);
-    $latest = $state['latest'] ?? null;
-
-    // 2. Tentukan apakah data ESP32 masih segar.
-    $receivedAt = is_array($latest)
-        ? strtotime($latest['received_at'] ?? '')
-        : false;
-
-    $maxAgeSeconds = 60;
-
-    $liveAvailable = (
-        is_array($latest) &&
-        $receivedAt !== false &&
-        (time() - $receivedAt) >= 0 &&
-        (time() - $receivedAt) <= $maxAgeSeconds
-    );
-
-    // 3. Ambil riwayat pengukuran untuk grafik.
-    $sql = "
-        SELECT
-            id,
-            power_w,
-            reactive_power_kvar,
-            apparent_power_kva,
-            measured_at
-        FROM energy_readings
-        WHERE measured_at >= NOW() - INTERVAL $days DAY
-        ORDER BY measured_at ASC, id ASC
-        LIMIT ?
-    ";
-
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param('i', $limit);
-    $stmt->execute();
-
-    $result = $stmt->get_result();
-    $history = [];
-
-    while ($row = $result->fetch_assoc()) {
-        $history[] = [
-            'label' => $row['measured_at'],
-
-            'active_kw' => $row['power_w'] === null
-                ? null
-                : (float) $row['power_w'] / 1000,
-
-            'reactive_kvar' => numberOrNull(
-                $row['reactive_power_kvar'] ?? null
-            ),
-
-            'apparent_kva' => numberOrNull(
-                $row['apparent_power_kva'] ?? null
-            )
-        ];
+    if (($_GET['export'] ?? '') === '1') {
+        $query['export'] = '1';
     }
 
-    $stmt->close();
+    $requestUrl = VERCEL_API_URL;
 
-    // 4. Ambil pengukuran terakhir dari seluruh database.
-    // Query ini tidak dibatasi rentang grafik day/week/month.
-    $stmt = $conn->prepare("
-        SELECT *
-        FROM energy_readings
-        ORDER BY measured_at DESC, id DESC
-        LIMIT 1
-    ");
-
-    $stmt->execute();
-
-    $dbLatest = $stmt->get_result()->fetch_assoc();
-
-    $stmt->close();
-
-    // 5. Prioritas: ESP32 real-time > database.
-    if ($liveAvailable) {
-        $displayData = $latest;
-        $displaySource = 'realtime';
-    } elseif (is_array($dbLatest)) {
-        $displayData = $dbLatest;
-        $displaySource = 'database';
-    } else {
-        $displayData = null;
-        $displaySource = null;
+    if (!empty($query)) {
+        $requestUrl .= '?' . http_build_query($query);
     }
 
-    // 6. Kedua sumber kosong: kirim metrik kosong.
-    if ($displayData === null) {
-        $payload = makePayload(null, $history);
+    $ch = curl_init($requestUrl);
 
-        $payload['data_available'] = false;
-        $payload['display_source'] = null;
-        $payload['database_count'] = count($history);
-        $payload['message'] =
-            'Belum ada data dari ESP32 maupun database.';
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => 60,
+        CURLOPT_HTTPHEADER => [
+            'Accept: application/json'
+        ]
+    ]);
 
-        echo json_encode(
-            $payload,
-            JSON_UNESCAPED_UNICODE
-        );
+    $response = curl_exec($ch);
+    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
+    if ($response === false) {
+        curl_close($ch);
+        http_response_code(502);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Gagal menghubungi Vercel API.'
+        ]);
         exit;
     }
 
-    // 7. Kirim data yang dipilih ke dashboard.
-    $payload = makePayload($displayData, $history);
+    curl_close($ch);
 
-    $payload['data_available'] = true;
-    $payload['display_source'] = $displaySource;
-    $payload['database_count'] = count($history);
-
-    if ($displaySource === 'realtime') {
-        $payload['message'] =
-            'Menampilkan data real-time ESP32.';
-    } else {
-        $payload['message'] =
-            'ESP32 tidak mengirim data terbaru. Menampilkan pengukuran terakhir dari database.';
-    }
-
-    echo json_encode(
-        $payload,
-        JSON_UNESCAPED_UNICODE
-    );
-
+    http_response_code($status);
+    echo $response;
     exit;
 }
 
@@ -419,263 +329,66 @@ if ($method === 'GET') {
 |--------------------------------------------------------------------------
 */
 
+
 if ($method === 'POST') {
+    $requestBody = file_get_contents('php://input');
 
-    $input = json_decode(
-        file_get_contents('php://input'),
-        true
-    );
-
-    if (!is_array($input)) {
+    // Validasi body request
+    if ($requestBody === false || trim($requestBody) === '') {
         http_response_code(400);
-
         echo json_encode([
             'success' => false,
-            'message' => 'Body JSON tidak valid.'
-        ], JSON_UNESCAPED_UNICODE);
-
+            'message' => 'Request body JSON kosong.'
+        ]);
         exit;
     }
 
-    // Validasi seluruh parameter numerik.
-    $values = [];
+    // Validasi format JSON
+    json_decode($requestBody);
 
-    foreach ($numericFields as $field) {
-
-        $value = $input[$field] ?? null;
-
-        if (
-            $value !== null &&
-            (
-                !is_numeric($value) ||
-                !is_finite((float) $value)
-            )
-        ) {
-            http_response_code(422);
-
-            echo json_encode([
-                'success' => false,
-                'message' =>
-                    "Nilai $field harus berupa angka atau null."
-            ], JSON_UNESCAPED_UNICODE);
-
-            exit;
-        }
-
-        $values[$field] = $value === null
-            ? null
-            : (float) $value;
-    }
-
-    // Validasi sumber pengukuran.
-    $source = $input['source'] ?? 'manual';
-
-    if (
-        !is_string($source) ||
-        strlen($source) > 50 ||
-        trim($source) === ''
-    ) {
-        http_response_code(422);
-
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        http_response_code(400);
         echo json_encode([
             'success' => false,
-            'message' =>
-                'Source harus berupa teks maksimal 50 karakter.'
-        ], JSON_UNESCAPED_UNICODE);
-
+            'message' => 'Format JSON tidak valid.'
+        ]);
         exit;
     }
 
-    // Buka dan kunci file state agar tidak bentrok.
-    $handle = @fopen($stateFile, 'c+');
+    // Teruskan data ke Vercel API untuk disimpan ke Neon
+    $ch = curl_init(VERCEL_API_URL);
 
-    if ($handle === false) {
-        http_response_code(500);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $requestBody,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => 60,
+        CURLOPT_HTTPHEADER => [
+            'Content-Type: application/json',
+            'Accept: application/json'
+        ]
+    ]);
 
+    $response = curl_exec($ch);
+    $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+    if ($response === false || $status === 0) {
+        curl_close($ch);
+
+        http_response_code(502);
         echo json_encode([
             'success' => false,
-            'message' =>
-                'Gagal membuka penyimpanan sementara.'
-        ], JSON_UNESCAPED_UNICODE);
-
+            'message' => 'Gagal menghubungi Vercel API.'
+        ]);
         exit;
     }
 
-    if (!flock($handle, LOCK_EX)) {
-        fclose($handle);
+    curl_close($ch);
 
-        http_response_code(500);
-
-        echo json_encode([
-            'success' => false,
-            'message' =>
-                'Gagal mengunci penyimpanan sementara.'
-        ], JSON_UNESCAPED_UNICODE);
-
-        exit;
-    }
-
-    rewind($handle);
-
-    $content = stream_get_contents($handle);
-    $state = json_decode($content, true);
-
-    if (!is_array($state)) {
-        $state = [];
-    }
-
-    $now = time();
-
-    if (!isset($state['started_at'])) {
-        $state['started_at'] = $now;
-    }
-
-    // Inisialisasi jadwal berdasarkan data database terakhir.
-    if (empty($state['schedule_initialized'])) {
-
-        $stmt = $conn->prepare("
-            SELECT UNIX_TIMESTAMP(measured_at) AS saved_epoch
-            FROM energy_readings
-            ORDER BY measured_at DESC, id DESC
-            LIMIT 1
-        ");
-
-        $stmt->execute();
-
-        $lastRow = $stmt->get_result()->fetch_assoc();
-
-        $stmt->close();
-
-        $state['last_saved_epoch'] =
-            ($lastRow && $lastRow['saved_epoch'] !== null)
-                ? (int) $lastRow['saved_epoch']
-                : null;
-
-        $state['schedule_initialized'] = true;
-    }
-
-    // Perbarui data real-time pada setiap POST.
-    $latest = $values;
-    $latest['source'] = $source;
-    $latest['received_at'] = date('Y-m-d H:i:s');
-
-    $state['latest'] = $latest;
-
-    writeEnergyState($handle, $state);
-
-    // Simpan satu sampel ke database setiap 10 menit.
-    $referenceTime = $state['last_saved_epoch']
-        ?? $state['started_at'];
-
-    $shouldSave = ($now - $referenceTime) >= 600;
-
-    $saved = false;
-    $savedId = null;
-
-    if ($shouldSave) {
-
-        try {
-
-            $insertFields = $numericFields;
-
-            $columns = array_merge(
-                $insertFields,
-                ['source']
-            );
-
-            $columnSql = implode(', ', $columns);
-
-            $placeholders = implode(
-                ', ',
-                array_fill(0, count($columns), '?')
-            );
-
-            $sql = "
-                INSERT INTO energy_readings
-                ($columnSql)
-                VALUES ($placeholders)
-            ";
-
-            $stmt = $conn->prepare($sql);
-
-            // Parameter numerik menggunakan tipe double,
-            // sedangkan source menggunakan string.
-            $types = str_repeat(
-                'd',
-                count($insertFields)
-            ) . 's';
-
-            $params = [$types];
-
-            foreach ($insertFields as $field) {
-                $params[] = &$values[$field];
-            }
-
-            $params[] = &$source;
-
-            call_user_func_array(
-                [$stmt, 'bind_param'],
-                $params
-            );
-
-            $stmt->execute();
-
-            $savedId = $conn->insert_id;
-
-            $stmt->close();
-
-            $state['last_saved_epoch'] = time();
-
-            writeEnergyState($handle, $state);
-
-            $saved = true;
-
-        } catch (Throwable $e) {
-
-            flock($handle, LOCK_UN);
-            fclose($handle);
-
-            error_log(
-                'VoltView database save error: '
-                . $e->getMessage()
-            );
-
-            http_response_code(500);
-
-            echo json_encode([
-                'success' => false,
-                'message' =>
-                    'Data diterima, tetapi gagal disimpan ke database.'
-            ], JSON_UNESCAPED_UNICODE);
-
-            exit;
-        }
-    }
-
-    flock($handle, LOCK_UN);
-    fclose($handle);
-
-    http_response_code($saved ? 201 : 200);
-
-    $referenceTime = $state['last_saved_epoch']
-        ?? $state['started_at'];
-
-    echo json_encode([
-        'success' => true,
-
-        'message' => $saved
-            ? 'Data pengukuran berhasil disimpan.'
-            : 'Data real-time berhasil diperbarui.',
-
-        'saved_to_database' => $saved,
-        'id' => $savedId,
-
-        'next_save_in_seconds' => max(
-            0,
-            600 - (time() - $referenceTime)
-        )
-    ], JSON_UNESCAPED_UNICODE);
-
+    // Teruskan respons dari Vercel ke pengirim data
+    http_response_code($status);
+    echo $response;
     exit;
 }
 
