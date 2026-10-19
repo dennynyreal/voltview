@@ -3,12 +3,24 @@ const { neon } = require("@neondatabase/serverless");
 
 const sql = neon(process.env.DATABASE_URL);
 
+// Domain yang diizinkan mengakses API dari browser.
+const allowedOrigins = [
+  "https://autoshipsmrc.site.je",
+  "http://localhost",
+  "http://127.0.0.1"
+];
+
 const numberOrNull = (value) => {
-  if (value === null || value === undefined || value === "") {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
     return null;
   }
 
   const number = Number(value);
+
   return Number.isFinite(number) ? number : null;
 };
 
@@ -36,23 +48,48 @@ const fields = [
   "avg_load_percent"
 ];
 
+const average = (values) => {
+  const valid = values.filter(
+    (value) => value !== null
+  );
+
+  if (valid.length === 0) {
+    return null;
+  }
+
+  return (
+    valid.reduce((sum, value) => sum + value, 0) /
+    valid.length
+  );
+};
+
 const readRow = (row) => {
   const n = (key) => numberOrNull(row[key]);
 
-  const voltageLn = [n("voltage_ln_r"), n("voltage_ln_s"), n("voltage_ln_t")];
-  const voltageLl = [n("voltage_ll_rs"), n("voltage_ll_st"), n("voltage_ll_tr")];
-  const currents = [n("current_r"), n("current_s"), n("current_t")];
+  const voltageLn = [
+    n("voltage_ln_r"),
+    n("voltage_ln_s"),
+    n("voltage_ln_t")
+  ];
 
-  const average = (values) => {
-    const valid = values.filter((value) => value !== null);
-    return valid.length
-      ? valid.reduce((sum, value) => sum + value, 0) / valid.length
-      : null;
-  };
+  const voltageLl = [
+    n("voltage_ll_rs"),
+    n("voltage_ll_st"),
+    n("voltage_ll_tr")
+  ];
+
+  const currents = [
+    n("current_r"),
+    n("current_s"),
+    n("current_t")
+  ];
+
+  const powerW = n("power_w");
 
   return {
     success: true,
     data_available: true,
+
     voltage: {
       ln: {
         r: n("voltage_ln_r"),
@@ -60,6 +97,7 @@ const readRow = (row) => {
         t: n("voltage_ln_t"),
         avg: average(voltageLn)
       },
+
       ll: {
         rs: n("voltage_ll_rs"),
         st: n("voltage_ll_st"),
@@ -67,6 +105,7 @@ const readRow = (row) => {
         avg: average(voltageLl)
       }
     },
+
     current: {
       r: n("current_r"),
       s: n("current_s"),
@@ -74,17 +113,24 @@ const readRow = (row) => {
       n: n("current_n"),
       avg: average(currents)
     },
+
     power: {
-      active_kw: n("power_w") === null ? null : n("power_w") / 1000,
+      active_kw:
+        powerW === null ? null : powerW / 1000,
+
       reactive_kvar: n("reactive_power_kvar"),
       apparent_kva: n("apparent_power_kva"),
       power_factor: n("power_factor"),
       avg_load_percent: n("avg_load_percent")
     },
+
     energy: {
       active_kwh: n("energy_kwh"),
       reactive_kvarh: n("reactive_energy_kvarh")
     },
+
+    frequency_hz: n("frequency_hz"),
+    source: row.source ?? null,
     run_hours: n("run_hours"),
     timestamp: row.measured_at,
     history: []
@@ -92,86 +138,176 @@ const readRow = (row) => {
 };
 
 module.exports = async (req, res) => {
+  // CORS untuk dashboard lokal dan online.
+  const origin = req.headers.origin;
+
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader(
+      "Access-Control-Allow-Origin",
+      origin
+    );
+
+    res.setHeader("Vary", "Origin");
+  }
+
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET, POST, OPTIONS"
+  );
+
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type"
+  );
+
   res.setHeader("Cache-Control", "no-store");
 
+  // Menangani preflight request dari browser.
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+
   try {
+    // =========================================
+    // POST: Menerima data dari ESP32
+    // =========================================
     if (req.method === "POST") {
       const body = req.body;
 
-      if (!body || typeof body !== "object" || Array.isArray(body)) {
+      if (
+        !body ||
+        typeof body !== "object" ||
+        Array.isArray(body)
+      ) {
         return res.status(400).json({
           success: false,
           message: "Payload JSON tidak valid."
         });
       }
 
-      const values = fields.map((field) => numberOrNull(body[field]));
+      const values = fields.map((field) =>
+        numberOrNull(body[field])
+      );
+
+      const source =
+        typeof body.source === "string"
+          ? body.source.slice(0, 80)
+          : "UNKNOWN";
 
       await sql`
         INSERT INTO energy_readings (
-          voltage, voltage_ln_r, voltage_ln_s, voltage_ln_t,
-          voltage_ll_rs, voltage_ll_st, voltage_ll_tr,
-          current_a, current_r, current_s, current_t, current_n,
-          power_w, reactive_power_kvar, apparent_power_kva,
-          energy_kwh, reactive_energy_kvarh, frequency_hz,
-          power_factor, run_hours, avg_load_percent, source
-        ) VALUES (
-          ${values[0]}, ${values[1]}, ${values[2]}, ${values[3]},
-          ${values[4]}, ${values[5]}, ${values[6]},
-          ${values[7]}, ${values[8]}, ${values[9]}, ${values[10]}, ${values[11]},
-          ${values[12]}, ${values[13]}, ${values[14]},
-          ${values[15]}, ${values[16]}, ${values[17]},
-          ${values[18]}, ${values[19]}, ${values[20]},
-          ${typeof body.source === "string" ? body.source.slice(0, 80) : "UNKNOWN"}
+          voltage,
+          voltage_ln_r,
+          voltage_ln_s,
+          voltage_ln_t,
+          voltage_ll_rs,
+          voltage_ll_st,
+          voltage_ll_tr,
+          current_a,
+          current_r,
+          current_s,
+          current_t,
+          current_n,
+          power_w,
+          reactive_power_kvar,
+          apparent_power_kva,
+          energy_kwh,
+          reactive_energy_kvarh,
+          frequency_hz,
+          power_factor,
+          run_hours,
+          avg_load_percent,
+          source
+        )
+        VALUES (
+          ${values[0]},
+          ${values[1]},
+          ${values[2]},
+          ${values[3]},
+          ${values[4]},
+          ${values[5]},
+          ${values[6]},
+          ${values[7]},
+          ${values[8]},
+          ${values[9]},
+          ${values[10]},
+          ${values[11]},
+          ${values[12]},
+          ${values[13]},
+          ${values[14]},
+          ${values[15]},
+          ${values[16]},
+          ${values[17]},
+          ${values[18]},
+          ${values[19]},
+          ${values[20]},
+          ${source}
         )
       `;
 
       return res.status(201).json({
         success: true,
-        message: "Data pengukuran berhasil disimpan."
+        message: "Data pengukuran berhasil disimpan.",
+        saved_to_database: true
       });
     }
 
-    if (req.method !== "GET") {
-      res.setHeader("Allow", "GET, POST");
-      return res.status(405).json({
-        success: false,
-        message: "Metode tidak didukung."
-      });
+    // =========================================
+    // GET: Mengambil data untuk dashboard
+    // =========================================
+    if (req.method === "GET") {
+      const rows = await sql`
+        SELECT *
+        FROM energy_readings
+        ORDER BY measured_at DESC
+        LIMIT 100
+      `;
+
+      if (rows.length === 0) {
+        return res.status(200).json({
+          success: true,
+          data_available: false,
+          message: "Belum ada data pengukuran.",
+          history: []
+        });
+      }
+
+      // Data terbaru untuk kartu monitoring.
+      const latest = readRow(rows[0]);
+
+      // Data historis untuk grafik.
+      latest.history = rows
+        .slice()
+        .reverse()
+        .map((row) => {
+          const powerW = numberOrNull(row.power_w);
+
+          return {
+            timestamp: row.measured_at,
+            voltage: numberOrNull(row.voltage),
+            current_a: numberOrNull(row.current_a),
+
+            active_kw:
+              powerW === null ? null : powerW / 1000,
+
+            reactive_kvar:
+              numberOrNull(row.reactive_power_kvar),
+
+            apparent_kva:
+              numberOrNull(row.apparent_power_kva)
+          };
+        });
+
+      return res.status(200).json(latest);
     }
 
-    const rows = await sql`
-      SELECT *
-      FROM energy_readings
-      ORDER BY measured_at DESC
-      LIMIT 100
-    `;
+    // Metode selain GET, POST, dan OPTIONS ditolak.
+    res.setHeader("Allow", "GET, POST, OPTIONS");
 
-    if (!rows.length) {
-      return res.status(200).json({
-        success: true,
-        data_available: false,
-        message: "Belum ada data pengukuran."
-      });
-    }
-
-    const latest = readRow(rows[0]);
-
-    latest.history = rows
-      .slice()
-      .reverse()
-      .map((row) => ({
-        timestamp: row.measured_at,
-        voltage: numberOrNull(row.voltage),
-        current_a: numberOrNull(row.current_a),
-        active_kw: numberOrNull(row.power_w) === null
-          ? null
-          : numberOrNull(row.power_w) / 1000,
-        reactive_kvar: numberOrNull(row.reactive_power_kvar),
-        apparent_kva: numberOrNull(row.apparent_power_kva)
-      }));
-
-    return res.status(200).json(latest);
+    return res.status(405).json({
+      success: false,
+      message: "Metode tidak didukung."
+    });
   } catch (error) {
     console.error("VoltView API error:", error);
 
