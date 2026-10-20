@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#0b1220" />
   <title>VoltView — Building Energy Monitor</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -683,117 +684,502 @@ try {
 
 
 
+
 $('exportBtn').addEventListener('click', async () => {
-  const button = $('exportBtn');
-  const originalHTML = button.innerHTML;
+    const button = $('exportBtn');
+    const originalHTML = button.innerHTML;
 
-  try {
-    button.disabled = true;
-    button.textContent = 'Mengekspor Excel...';
+    try {
+        button.disabled = true;
+        button.textContent = 'Membuat laporan Excel...';
 
-    // Pastikan library Excel tersedia.
-    if (typeof XLSX === 'undefined') {
-      throw new Error('Library Excel gagal dimuat. Periksa koneksi internet.');
+        if (typeof ExcelJS === 'undefined') {
+            throw new Error('Library ExcelJS gagal dimuat. Periksa koneksi internet.');
+        }
+
+        // ==========================================
+        // 1. AMBIL DATA DARI VERCEL API
+        // ==========================================
+
+        const range = selectedRange;
+
+        const rangeLabels = {
+            day: '24 jam terakhir',
+            week: '7 hari terakhir',
+            month: '30 hari terakhir'
+        };
+
+        const url = new URL(
+            'https://voltview.vercel.app/api/voltview'
+        );
+
+        url.searchParams.set('export', '1');
+        url.searchParams.set('range', range);
+
+        const response = await fetch(url.toString(), {
+            method: 'GET',
+            headers: {
+                Accept: 'application/json'
+            },
+            cache: 'no-store'
+        });
+
+        if (!response.ok) {
+            throw new Error(`API ekspor gagal: HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (
+            result.success !== true ||
+            !Array.isArray(result.rows)
+        ) {
+            throw new Error('Format data dari API Vercel tidak valid.');
+        }
+
+        if (result.rows.length === 0) {
+            throw new Error('Tidak ada data untuk periode yang dipilih.');
+        }
+
+        const records = result.rows;
+
+        // ==========================================
+        // 2. KONFIGURASI WARNA DAN FORMAT
+        // ==========================================
+
+        const COLORS = {
+            navy: '142D4E',
+            green: '167D68',
+            lightGreen: 'E6F3EF',
+            lightBlue: 'F0F6FA',
+            white: 'FFFFFF',
+            border: 'D9E2F3',
+            text: '243247',
+            muted: '64748B'
+        };
+
+        const borderStyle = {
+            top: { style: 'thin', color: { argb: COLORS.border } },
+            left: { style: 'thin', color: { argb: COLORS.border } },
+            bottom: { style: 'thin', color: { argb: COLORS.border } },
+            right: { style: 'thin', color: { argb: COLORS.border } }
+        };
+
+        const workbook = new ExcelJS.Workbook();
+
+        workbook.creator = 'VoltView Energy Monitoring';
+        workbook.subject = 'Laporan Pengukuran Energi';
+        workbook.title = 'VoltView Energy Monitoring Report';
+        workbook.created = new Date();
+        workbook.modified = new Date();
+
+        // ==========================================
+        // 3. DEFINISI KOLOM DATA
+        // ==========================================
+
+        const columns = [
+            { key: 'id', header: 'ID', width: 9 },
+            { key: 'measured_at', header: 'Waktu Pengukuran', width: 23 },
+            { key: 'voltage', header: 'Tegangan (V)', width: 15 },
+            { key: 'current_a', header: 'Arus (A)', width: 14 },
+            { key: 'power_w', header: 'Daya Aktif (W)', width: 18 },
+            { key: 'energy_kwh', header: 'Energi Aktif (kWh)', width: 20 },
+            { key: 'frequency_hz', header: 'Frekuensi (Hz)', width: 16 },
+            { key: 'power_factor', header: 'Faktor Daya', width: 16 },
+            { key: 'source', header: 'Sumber Data', width: 18 },
+            { key: 'voltage_ln_r', header: 'Tegangan L-N R (V)', width: 20 },
+            { key: 'voltage_ln_s', header: 'Tegangan L-N S (V)', width: 20 },
+            { key: 'voltage_ln_t', header: 'Tegangan L-N T (V)', width: 20 },
+            { key: 'voltage_ll_rs', header: 'Tegangan L-L RS (V)', width: 20 },
+            { key: 'voltage_ll_st', header: 'Tegangan L-L ST (V)', width: 20 },
+            { key: 'voltage_ll_tr', header: 'Tegangan L-L TR (V)', width: 20 },
+            { key: 'current_r', header: 'Arus Fasa R (A)', width: 17 },
+            { key: 'current_s', header: 'Arus Fasa S (A)', width: 17 },
+            { key: 'current_t', header: 'Arus Fasa T (A)', width: 17 },
+            { key: 'current_n', header: 'Arus Netral (A)', width: 17 },
+            { key: 'reactive_power_kvar', header: 'Daya Reaktif (kvar)', width: 21 },
+            { key: 'apparent_power_kva', header: 'Daya Semu (kVA)', width: 20 },
+            { key: 'reactive_energy_kvarh', header: 'Energi Reaktif (kvarh)', width: 22 },
+            { key: 'run_hours', header: 'Jam Operasi', width: 16 },
+            { key: 'avg_load_percent', header: 'Beban Rata-rata (%)', width: 22 }
+        ];
+
+        const numericFields = columns
+            .filter(column => !['measured_at', 'source'].includes(column.key))
+            .map(column => column.key);
+
+        // ==========================================
+        // 4. HELPER UNTUK HEADER DAN BARIS DATA
+        // ==========================================
+
+        function styleHeader(row) {
+            row.height = 32;
+
+            row.eachCell(cell => {
+                cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: COLORS.green }
+                };
+
+                cell.font = {
+                    name: 'Arial',
+                    size: 10,
+                    bold: true,
+                    color: { argb: COLORS.white }
+                };
+
+                cell.alignment = {
+                    vertical: 'middle',
+                    horizontal: 'center',
+                    wrapText: true
+                };
+
+                cell.border = borderStyle;
+            });
+        }
+
+        function styleBody(worksheet, startRow, endRow) {
+            for (let rowNumber = startRow; rowNumber <= endRow; rowNumber++) {
+                const row = worksheet.getRow(rowNumber);
+
+                row.height = 23;
+
+                row.eachCell(cell => {
+                    const alternate = rowNumber % 2 === 0;
+
+                    cell.fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: {
+                            argb: alternate
+                                ? COLORS.lightBlue
+                                : COLORS.white
+                        }
+                    };
+
+                    cell.font = {
+                        name: 'Arial',
+                        size: 10,
+                        color: { argb: COLORS.text }
+                    };
+
+                    cell.alignment = {
+                        vertical: 'middle'
+                    };
+
+                    cell.border = borderStyle;
+                });
+            }
+        }
+
+        // ==========================================
+        // 5. SHEET RINGKASAN
+        // ==========================================
+
+        const summary = workbook.addWorksheet('Ringkasan');
+
+        summary.columns = [
+            { key: 'label', width: 29 },
+            { key: 'value', width: 48 },
+            { width: 4 },
+            { width: 4 }
+        ];
+
+        summary.mergeCells('A1:D1');
+
+        const titleCell = summary.getCell('A1');
+        titleCell.value = 'VOLT VIEW | LAPORAN PENGUKURAN ENERGI';
+        titleCell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: COLORS.navy }
+        };
+        titleCell.font = {
+            name: 'Arial',
+            size: 16,
+            bold: true,
+            color: { argb: COLORS.white }
+        };
+        titleCell.alignment = {
+            vertical: 'middle',
+            horizontal: 'left'
+        };
+
+        summary.getRow(1).height = 42;
+
+        summary.addRow([]);
+        summary.addRow(['INFORMASI LAPORAN', 'KETERANGAN']);
+
+        const summaryHeader = summary.getRow(3);
+        styleHeader(summaryHeader);
+
+        const summaryItems = [
+            ['Periode', rangeLabels[range] || range],
+            ['Waktu Ekspor', new Date().toLocaleString('id-ID')],
+            ['Jumlah Sampel', records.length],
+            ['Sumber Data', 'Vercel API / Neon PostgreSQL'],
+            ['Status Data', 'Data sesuai respons API pada waktu ekspor']
+        ];
+
+        summaryItems.forEach(item => {
+            summary.addRow(item);
+        });
+
+        styleBody(summary, 4, summary.lastRow.number);
+
+        for (let rowNumber = 4; rowNumber <= summary.lastRow.number; rowNumber++) {
+            const labelCell = summary.getCell(rowNumber, 1);
+
+            labelCell.font = {
+                name: 'Arial',
+                size: 10,
+                bold: true,
+                color: { argb: COLORS.navy }
+            };
+
+            summary.getCell(rowNumber, 2).alignment = {
+                vertical: 'middle',
+                wrapText: true
+            };
+        }
+
+        summary.addRow([]);
+        summary.addRow(['CATATAN', 'KETERANGAN']);
+        styleHeader(summary.getRow(summary.lastRow.number));
+
+        summary.addRow([
+            'Rentang data',
+            'Mengikuti rentang waktu yang diterapkan oleh API Vercel.'
+        ]);
+
+        summary.addRow([
+            'Urutan data',
+            'Mengikuti urutan data yang diterima dari API.'
+        ]);
+
+        styleBody(
+            summary,
+            summary.lastRow.number - 1,
+            summary.lastRow.number
+        );
+
+        summary.views = [{ state: 'frozen', ySplit: 3 }];
+
+        // ==========================================
+        // 6. SHEET DATA PENGUKURAN
+        // ==========================================
+
+        const measurement = workbook.addWorksheet('Data Pengukuran');
+
+        measurement.columns = columns.map(column => ({
+            key: column.key,
+            header: column.header,
+            width: column.width
+        }));
+
+        measurement.getRow(1).values = columns.map(column => column.header);
+        styleHeader(measurement.getRow(1));
+
+        records.forEach(record => {
+            const row = {};
+
+            columns.forEach(column => {
+                let value = record[column.key] ?? null;
+
+                if (
+                    column.key === 'measured_at' &&
+                    value !== null
+                ) {
+                    const parsedDate = new Date(value);
+
+                    // Simpan sebagai tanggal Excel jika valid.
+                    value = Number.isNaN(parsedDate.getTime())
+                        ? String(value)
+                        : parsedDate;
+                } else if (
+                    numericFields.includes(column.key) &&
+                    value !== null &&
+                    value !== '' &&
+                    Number.isFinite(Number(value))
+                ) {
+                    value = Number(value);
+                }
+
+                row[column.key] = value;
+            });
+
+            measurement.addRow(row);
+        });
+
+        styleBody(measurement, 2, measurement.rowCount);
+
+        // Format angka.
+        measurement.eachRow((row, rowNumber) => {
+            if (rowNumber === 1) return;
+
+            columns.forEach((column, index) => {
+                const cell = row.getCell(index + 1);
+
+                if (column.key === 'measured_at' && cell.value instanceof Date) {
+                    cell.numFmt = 'dd/mm/yyyy hh:mm:ss';
+                } else if (numericFields.includes(column.key)) {
+                    cell.numFmt = '#,##0.00;[Red]-#,##0.00';
+                }
+            });
+        });
+
+        measurement.views = [{
+            state: 'frozen',
+            ySplit: 1,
+            xSplit: 2,
+            showGridLines: false
+        }];
+
+        measurement.autoFilter = {
+            from: { row: 1, column: 1 },
+            to: { row: 1, column: columns.length }
+        };
+
+        // ==========================================
+        // 7. SHEET ANALISIS STATISTIK
+        // ==========================================
+
+        const analysis = workbook.addWorksheet('Analisis');
+
+        analysis.columns = [
+            { header: 'Parameter', key: 'parameter', width: 28 },
+            { header: 'Satuan', key: 'unit', width: 15 },
+            { header: 'Minimum', key: 'min', width: 18 },
+            { header: 'Maksimum', key: 'max', width: 18 },
+            { header: 'Rata-rata', key: 'avg', width: 18 },
+            { header: 'Jumlah Sampel', key: 'count', width: 20 }
+        ];
+
+        styleHeader(analysis.getRow(1));
+
+        const metrics = [
+            ['voltage', 'Tegangan', 'V'],
+            ['current_a', 'Arus', 'A'],
+            ['power_w', 'Daya Aktif', 'W'],
+            ['energy_kwh', 'Energi Aktif', 'kWh'],
+            ['frequency_hz', 'Frekuensi', 'Hz'],
+            ['power_factor', 'Faktor Daya', '-'],
+            ['voltage_ln_r', 'Tegangan L-N R', 'V'],
+            ['voltage_ln_s', 'Tegangan L-N S', 'V'],
+            ['voltage_ln_t', 'Tegangan L-N T', 'V'],
+            ['voltage_ll_rs', 'Tegangan L-L RS', 'V'],
+            ['voltage_ll_st', 'Tegangan L-L ST', 'V'],
+            ['voltage_ll_tr', 'Tegangan L-L TR', 'V'],
+            ['current_r', 'Arus Fasa R', 'A'],
+            ['current_s', 'Arus Fasa S', 'A'],
+            ['current_t', 'Arus Fasa T', 'A'],
+            ['current_n', 'Arus Netral', 'A'],
+            ['reactive_power_kvar', 'Daya Reaktif', 'kvar'],
+            ['apparent_power_kva', 'Daya Semu', 'kVA'],
+            ['reactive_energy_kvarh', 'Energi Reaktif', 'kvarh'],
+            ['run_hours', 'Jam Operasi', 'jam'],
+            ['avg_load_percent', 'Beban Rata-rata', '%']
+        ];
+
+        metrics.forEach(([field, name, unit]) => {
+            const values = records
+                .map(record => record[field])
+                .filter(value =>
+                    value !== null &&
+                    value !== undefined &&
+                    value !== '' &&
+                    Number.isFinite(Number(value))
+                )
+                .map(Number);
+
+            const count = values.length;
+
+            analysis.addRow({
+                parameter: name,
+                unit,
+                min: count ? Math.min(...values) : null,
+                max: count ? Math.max(...values) : null,
+                avg: count
+                    ? values.reduce((sum, value) => sum + value, 0) / count
+                    : null,
+                count
+            });
+        });
+
+        styleBody(analysis, 2, analysis.rowCount);
+
+        analysis.eachRow((row, rowNumber) => {
+            if (rowNumber === 1) return;
+
+            [3, 4, 5].forEach(columnNumber => {
+                row.getCell(columnNumber).numFmt =
+                    '#,##0.00;[Red]-#,##0.00';
+                row.getCell(columnNumber).alignment = {
+                    vertical: 'middle',
+                    horizontal: 'right'
+                };
+            });
+
+            row.getCell(6).numFmt = '#,##0';
+        });
+
+        analysis.views = [{
+            state: 'frozen',
+            ySplit: 1,
+            showGridLines: false
+        }];
+
+        analysis.autoFilter = {
+            from: { row: 1, column: 1 },
+            to: { row: 1, column: 6 }
+        };
+
+        // ==========================================
+        // 8. SIAPKAN DAN UNDUH FILE EXCEL
+        // ==========================================
+
+        const buffer = await workbook.xlsx.writeBuffer();
+
+        const blob = new Blob(
+            [buffer],
+            {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            }
+        );
+
+        const objectUrl = URL.createObjectURL(blob);
+        const date = new Date().toISOString().slice(0, 10);
+        const filename = `voltview-report-${range}-${date}.xlsx`;
+
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = filename;
+
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
+
+        showNotice(
+            `Excel berhasil dibuat dengan ${records.length} data pengukuran.`,
+            'info'
+        );
+
+    } catch (error) {
+        console.error('Export error:', error);
+
+        showNotice(
+            error.message || 'Gagal membuat laporan Excel.',
+            'error'
+        );
+    } finally {
+        button.disabled = false;
+        button.innerHTML = originalHTML;
     }
-
-    // Gunakan rentang yang dipilih pada grafik.
-    const range = selectedRange;
-
-    const url = new URL(
-      'https://voltview.vercel.app/api/voltview'
-    );
-
-    url.searchParams.set('export', '1');
-    url.searchParams.set('range', range);
-
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-      cache: 'no-store'
-    });
-
-    if (!response.ok) {
-      throw new Error(`API ekspor gagal: HTTP ${response.status}`);
-    }
-
-    const result = await response.json();
-
-    if (result.success !== true || !Array.isArray(result.rows)) {
-      throw new Error(
-        result.message || 'Format data ekspor dari Vercel tidak sesuai.'
-      );
-    }
-
-    if (result.rows.length === 0) {
-      throw new Error('Belum ada data untuk diekspor pada periode ini.');
-    }
-
-    // Sheet 1: Ringkasan laporan.
-    const rangeLabels = {
-      day: 'Hari ini',
-      week: '7 hari terakhir',
-      month: '30 hari terakhir'
-    };
-
-    const summary = [
-      { Informasi: 'Nama laporan', Nilai: 'VoltView Energy Monitoring' },
-      { Informasi: 'Periode', Nilai: rangeLabels[range] || range },
-      { Informasi: 'Waktu ekspor', Nilai: new Date().toLocaleString('id-ID') },
-      { Informasi: 'Jumlah data', Nilai: result.rows.length },
-      { Informasi: 'Sumber data', Nilai: 'Vercel API / Neon PostgreSQL' }
-    ];
-
-    const workbook = XLSX.utils.book_new();
-
-    const summarySheet = XLSX.utils.json_to_sheet(summary);
-    summarySheet['!cols'] = [
-      { wch: 22 },
-      { wch: 38 }
-    ];
-
-    XLSX.utils.book_append_sheet(
-      workbook,
-      summarySheet,
-      'Ringkasan'
-    );
-
-    // Sheet 2: Data pengukuran lengkap dari API.
-    const dataSheet = XLSX.utils.json_to_sheet(result.rows);
-
-    dataSheet['!cols'] = Object.keys(result.rows[0]).map(key => ({
-      wch: Math.min(Math.max(key.length + 3, 14), 25)
-    }));
-
-    XLSX.utils.book_append_sheet(
-      workbook,
-      dataSheet,
-      'Data Pengukuran'
-    );
-
-    // Unduh berkas Excel.
-    const date = new Date().toISOString().slice(0, 10);
-    const filename = `voltview-report-${range}-${date}.xlsx`;
-
-    XLSX.writeFile(workbook, filename);
-
-    showNotice(
-      `Laporan Excel berhasil dibuat: ${result.rows.length} data pengukuran.`,
-      'info'
-    );
-
-  } catch (error) {
-    console.error('Export error:', error);
-
-    showNotice(
-      error.message || 'Gagal mengekspor laporan Excel.',
-      'error'
-    );
-
-  } finally {
-    button.disabled = false;
-    button.innerHTML = originalHTML;
-  }
 });
+
 
 
 
