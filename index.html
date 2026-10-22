@@ -533,8 +533,16 @@ const loadWidth = Number.isFinite(load)
 
 $('avgLoadBar').style.width = `${loadWidth}%`;
     const time = data.timestamp ? new Date(data.timestamp) : new Date();
-    setText('lastUpdated', time.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }));
-  }
+setText(
+    'lastUpdated',
+    time.toLocaleTimeString('id-ID', {
+        timeZone: 'Asia/Jakarta',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    })
+);  }
 
   const metricConfig = {
     active_kw: { label: 'Daya aktif (kW)', color: '#10b981', fill: 'rgba(16,185,129,.12)' },
@@ -763,6 +771,15 @@ $('exportBtn').addEventListener('click', async () => {
         }
 
         const records = result.rows;
+      console.log(
+    '[VoltView Export] Timestamp mentah:',
+    records[0]?.measured_at
+);
+
+console.log(
+    '[VoltView Export] Hasil konversi WIB:',
+    formatJakartaDateTime(records[0]?.measured_at)
+);
 
         // ==========================================
         // 2. KONFIGURASI WARNA DAN FORMAT
@@ -937,7 +954,19 @@ $('exportBtn').addEventListener('click', async () => {
 
         const summaryItems = [
             ['Periode', rangeLabels[range] || range],
-            ['Waktu Ekspor', new Date().toLocaleString('id-ID')],
+           [
+    'Waktu Ekspor',
+    new Intl.DateTimeFormat('id-ID', {
+        timeZone: 'Asia/Jakarta',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hourCycle: 'h23'
+    }).format(new Date())
+],
             ['Jumlah Sampel', records.length],
             ['Sumber Data', 'Vercel API / Neon PostgreSQL'],
             ['Status Data', 'Data sesuai respons API pada waktu ekspor']
@@ -1010,35 +1039,11 @@ records.forEach(record => {
         let value = record[column.key] ?? null;
 
         if (
-            column.key === 'measured_at' &&
-            value !== null
-        ) {
-            const parsedDate = new Date(value);
-
-            if (Number.isNaN(parsedDate.getTime())) {
-                value = String(value);
-            } else {
-                // Konversi timestamp menjadi komponen waktu WIB.
-                const parts = new Intl.DateTimeFormat('en-GB', {
-                    timeZone: 'Asia/Jakarta',
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hourCycle: 'h23'
-                }).formatToParts(parsedDate);
-
-                const part = type =>
-                    parts.find(item => item.type === type)?.value || '';
-
-                // Gunakan teks agar Excel tidak mengonversi
-                // timestamp kembali ke zona waktu lokal.
-                value =
-                    `${part('day')}/${part('month')}/${part('year')} ` +
-                    `${part('hour')}:${part('minute')}:${part('second')}`;
-            }
+    column.key === 'measured_at' &&
+    value !== null
+) {
+    value = formatJakartaDateTime(value);
+}
         } else if (
             numericFields.includes(column.key) &&
             value !== null &&
