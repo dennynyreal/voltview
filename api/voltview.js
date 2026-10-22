@@ -8,6 +8,7 @@ const sql = neon(process.env.DATABASE_URL);
 // =============================================
 
 const allowedOrigins = [
+  "https://voltview.vercel.app/",
   "https://autoshipsmrc.site.je",
   "http://localhost",
   "http://127.0.0.1"
