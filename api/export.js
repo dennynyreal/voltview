@@ -103,12 +103,30 @@ function setHeaderStyle(row) {
 }
 
 function toCellValue(field, value) {
-  if (value === null || value === undefined || value === '') return null;
-  if (field === 'measured_at' || field === 'source') return String(value);
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  if (field === 'measured_at') {
+    return formatJakartaDateTime(value);
+  }
+
+  if (field === 'source') {
+    return String(value);
+  }
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (
+    typeof value === 'string' &&
+    value.trim() !== '' &&
+    Number.isFinite(Number(value))
+  ) {
     return Number(value);
   }
+
   return String(value);
 }
 
@@ -284,6 +302,27 @@ function styleAnalysis(workbook, data) {
     });
   }
   return sheet;
+}
+
+function formatJakartaDateTime(value) {
+  if (!value) return null;
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).format(date);
 }
 
 function sendError(res, status, message, detail) {
