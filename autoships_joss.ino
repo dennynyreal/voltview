@@ -1,486 +1,242 @@
-
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ModbusMaster.h>
 #include <math.h>
+#include <string.h>
 
-// =====================================================
-// 1. KONFIGURASI HOTSPOT HP
-// =====================================================
-const char* ssid = "67";
-const char* password = "predatorcerr";
+const char* WIFI_SSID     = "";
+const char* WIFI_PASSWORD = "";
 
-// 2. ALAMAT API VOLTVIEW
-const char* serverURL =
-  "https://voltview.vercel.app/api/voltview";
+const char* API_URL = "https://voltview.vercel.app/api/voltview";
+const char* DATA_SOURCE = "PM2100_MODBUS";
 
-// =====================================================
-// 3. KONFIGURASI MODBUS PM2100
-// Asumsi awal: verifikasi dengan pengaturan meter.
-// =====================================================
-#define RS485_RX 16
-#define RS485_TX 17
-#define RS485_DE_RE 4
-#define SERIAL_CONFIG SERIAL_8E1
+static const int MODBUS_RX_PIN = 18;
+static const int MODBUS_TX_PIN = 19;
+static const uint32_t MODBUS_BAUD = 19200;
+static const uint8_t MODBUS_SLAVE_ID = 1;
+static const uint32_t SEND_INTERVAL_MS = 5000;
 
-const uint32_t MODBUS_BAUD = 19200;
-const uint8_t MODBUS_SLAVE_ID = 1;
 
-const unsigned long SEND_INTERVAL = 5000;
-unsigned long lastSendTime = 0;
+static const float NOMINAL_APPARENT_POWER_KVA = 0.0f;
 
-const bool WORD_SWAP = false;
-
+HardwareSerial ModbusSerial(2);
 ModbusMaster node;
+unsigned long lastSendMs = 0;
 
-// =====================================================
-// 4. STRUKTUR DATA
-// NAN = data belum tersedia / pembacaan gagal.
-// =====================================================
-struct EnergyData {
-  float voltage;
-  float voltage_ln_r;
-  float voltage_ln_s;
-  float voltage_ln_t;
 
-  float voltage_ll_rs;
-  float voltage_ll_st;
-  float voltage_ll_tr;
-
-  float current_a;
-  float current_r;
-  float current_s;
-  float current_t;
-  float current_n;
-
-  float power_w;
-  float reactive_power_kvar;
-  float apparent_power_kva;
-
-  float energy_kwh;
-  float reactive_energy_kvarh;
-
-  float frequency_hz;
-  float power_factor;
-
-  float run_hours;
-  float avg_load_percent;
-};
-
-// =====================================================
-// 5. KONTROL ARAH RS-485
-// =====================================================
-void preTransmission() {
-  digitalWrite(RS485_DE_RE, HIGH);
-}
-
-void postTransmission() {
-  digitalWrite(RS485_DE_RE, LOW);
-}
-
-// =====================================================
-// 6. BACA FLOAT 32-BIT DARI DUA REGISTER
-//
-// Asumsi:
-// - Input Registers, function code 0x04
-// - Data IEEE-754 Float32
-// - Dua register per nilai
-// =====================================================
-float readFloat32(uint16_t address, const char* label) {
-  uint8_t result = node.readInputRegisters(address, 2);
-
+bool readRegisters(uint16_t address, uint8_t count) {
+  uint8_t result = node.readHoldingRegisters(address, count); // FC03
   if (result != node.ku8MBSuccess) {
-    Serial.print("[MODBUS ERROR] ");
-    Serial.print(label);
-    Serial.print(" | offset=");
-    Serial.print(address);
-    Serial.print(" | kode=0x");
-    Serial.println(result, HEX);
-
-    return NAN;
-  }
-
-  uint16_t reg0 = node.getResponseBuffer(0);
-  uint16_t reg1 = node.getResponseBuffer(1);
-
-  uint32_t bits;
-
-  if (WORD_SWAP) {
-    bits = ((uint32_t)reg1 << 16) | reg0;
-  } else {
-    bits = ((uint32_t)reg0 << 16) | reg1;
-  }
-
-  union {
-    uint32_t bits;
-    float value;
-  } decoded;
-
-  decoded.bits = bits;
-
-  if (!isfinite(decoded.value)) {
-    Serial.print("[DATA ERROR] Float tidak valid: ");
-    Serial.println(label);
-    return NAN;
-  }
-
-  Serial.print(label);
-  Serial.print(" = ");
-  Serial.println(decoded.value, 4);
-
-  return decoded.value;
-}
-
-// =====================================================
-// 7. HITUNG RATA-RATA DARI NILAI YANG VALID
-// =====================================================
-float average3(float a, float b, float c) {
-  float total = 0.0;
-  int count = 0;
-
-  if (isfinite(a)) {
-    total += a;
-    count++;
-  }
-
-  if (isfinite(b)) {
-    total += b;
-    count++;
-  }
-
-  if (isfinite(c)) {
-    total += c;
-    count++;
-  }
-
-  if (count == 0) {
-    return NAN;
-  }
-
-  return total / count;
-}
-
-// =====================================================
-// 8. BACA DATA AKTUAL PM2100
-// Alamat mengikuti offset dari tabel yang kamu berikan.
-// =====================================================
-bool readEnergyData(EnergyData &d) {
-  // Jangan mengisi parameter yang belum diketahui
-  // dengan nilai simulasi.
-  d.voltage = NAN;
-  d.voltage_ln_r = NAN;
-  d.voltage_ln_s = NAN;
-  d.voltage_ln_t = NAN;
-
-  d.voltage_ll_rs = NAN;
-  d.voltage_ll_st = NAN;
-  d.voltage_ll_tr = NAN;
-
-  d.current_a = NAN;
-  d.current_r = NAN;
-  d.current_s = NAN;
-  d.current_t = NAN;
-  d.current_n = NAN;
-
-  d.power_w = NAN;
-  d.reactive_power_kvar = NAN;
-  d.apparent_power_kva = NAN;
-
-  d.energy_kwh = NAN;
-  d.reactive_energy_kvarh = NAN;
-
-  d.frequency_hz = NAN;
-  d.power_factor = NAN;
-
-  d.run_hours = NAN;
-  d.avg_load_percent = NAN;
-
-  Serial.println();
-  Serial.println("===== MEMBACA PM2100 =====");
-
-  // Arus fase A, B, C dan rata-rata.
-  d.current_r = readFloat32(3000, "Arus A (A)");
-  d.current_s = readFloat32(3002, "Arus B (A)");
-  d.current_t = readFloat32(3004, "Arus C (A)");
-  d.current_a = readFloat32(3010, "Arus rata-rata (A)");
-
-  if (!isfinite(d.current_a)) {
-    d.current_a = average3(
-      d.current_r, d.current_s, d.current_t
-    );
-  }
-
-  // Tegangan antarfase.
-  d.voltage_ll_rs = readFloat32(3020, "Tegangan A-B (V)");
-  d.voltage_ll_st = readFloat32(3022, "Tegangan B-C (V)");
-  d.voltage_ll_tr = readFloat32(3024, "Tegangan C-A (V)");
-
-  // Tegangan fase-netral.
-  d.voltage_ln_r = readFloat32(3028, "Tegangan A-N (V)");
-  d.voltage_ln_s = readFloat32(3030, "Tegangan B-N (V)");
-  d.voltage_ln_t = readFloat32(3032, "Tegangan C-N (V)");
-
-  // Tegangan L-N rata-rata.
-  d.voltage = readFloat32(3036, "Tegangan L-N rata-rata (V)");
-
-  if (!isfinite(d.voltage)) {
-    d.voltage = average3(
-      d.voltage_ln_r,
-      d.voltage_ln_s,
-      d.voltage_ln_t
-    );
-  }
-
-  // Daya reaktif total.
-  d.reactive_power_kvar =
-    readFloat32(3068, "Daya reaktif total (kvar)");
-
-  // Register parameter berikut belum terverifikasi:
-  // daya aktif, daya semu, PF, frekuensi,
-  // energi aktif, energi reaktif, arus netral,
-  // run hours, dan average load.
-  // Biarkan NAN hingga alamat serta format diketahui.
-
-  bool hasData =
-    isfinite(d.current_a) ||
-    isfinite(d.current_r) ||
-    isfinite(d.current_s) ||
-    isfinite(d.current_t) ||
-    isfinite(d.voltage) ||
-    isfinite(d.voltage_ll_rs) ||
-    isfinite(d.voltage_ln_r) ||
-    isfinite(d.reactive_power_kvar);
-
-  if (!hasData) {
-    Serial.println(
-      "Tidak ada pembacaan valid. Periksa Modbus."
-    );
+    Serial.printf("Modbus gagal: addr=%u, code=0x%02X\n", address, result);
     return false;
   }
-
   return true;
 }
 
-// =====================================================
-// 9. BANTUAN PEMBUAT JSON
-// NAN dikirim sebagai null JSON yang valid.
-// =====================================================
-void addNumber(
-  String &json,
-  const char* key,
-  float value,
-  int decimals,
-  bool &first
-) {
-  if (!first) {
-    json += ",";
-  }
+float readFloat32(uint16_t address) {
+  if (!readRegisters(address, 2)) return NAN;
 
-  json += "\"";
-  json += key;
-  json += "\":";
+  uint32_t raw = ((uint32_t)node.getResponseBuffer(0) << 16) |
+                  (uint32_t)node.getResponseBuffer(1);
+  float value;
+  memcpy(&value, &raw, sizeof(value));
 
-  if (isfinite(value)) {
-    json += String(value, decimals);
-  } else {
-    json += "null";
-  }
-
-  first = false;
+  if (!isfinite(value) || fabsf(value) > 1.0e9f) return NAN;
+  return value;
 }
 
-// =====================================================
-// 10. KIRIM DATA KE API VOLTVIEW
-// =====================================================
-void sendEnergyData() {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("Wi-Fi terputus. Data tidak dikirim.");
-    return;
+uint32_t readUInt32(uint16_t address) {
+  if (!readRegisters(address, 2)) return UINT32_MAX;
+
+  return ((uint32_t)node.getResponseBuffer(0) << 16) |
+         (uint32_t)node.getResponseBuffer(1);
+}
+
+float average3(float a, float b, float c) {
+  int count = 0;
+  float total = 0.0f;
+  if (isfinite(a)) { total += a; count++; }
+  if (isfinite(b)) { total += b; count++; }
+  if (isfinite(c)) { total += c; count++; }
+  return count ? total / count : NAN;
+}
+
+String jsonNumber(float value, uint8_t decimals = 3) {
+  if (!isfinite(value)) return "null";
+  return String(value, decimals);
+}
+
+void connectWiFi() {
+  if (WiFi.status() == WL_CONNECTED) return;
+
+  Serial.printf("Menghubungkan Wi-Fi: %s\n", WIFI_SSID);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+  uint32_t start = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - start < 20000) {
+    delay(500);
+    Serial.print('.');
   }
-
-  EnergyData d;
-
-  if (!readEnergyData(d)) {
-    Serial.println("Pembacaan PM2100 gagal.");
-    return;
-  }
-
-  String json;
-  json.reserve(1000);
-  json = "{";
-
-  bool first = true;
-
-  addNumber(json, "voltage", d.voltage, 2, first);
-
-  addNumber(json, "voltage_ln_r", d.voltage_ln_r, 2, first);
-  addNumber(json, "voltage_ln_s", d.voltage_ln_s, 2, first);
-  addNumber(json, "voltage_ln_t", d.voltage_ln_t, 2, first);
-
-  addNumber(json, "voltage_ll_rs", d.voltage_ll_rs, 2, first);
-  addNumber(json, "voltage_ll_st", d.voltage_ll_st, 2, first);
-  addNumber(json, "voltage_ll_tr", d.voltage_ll_tr, 2, first);
-
-  addNumber(json, "current_a", d.current_a, 3, first);
-  addNumber(json, "current_r", d.current_r, 3, first);
-  addNumber(json, "current_s", d.current_s, 3, first);
-  addNumber(json, "current_t", d.current_t, 3, first);
-  addNumber(json, "current_n", d.current_n, 3, first);
-
-  // Satuan API: watt.
-  // Tetap null sampai register daya aktif terverifikasi.
-  addNumber(json, "power_w", d.power_w, 2, first);
-
-  addNumber(
-    json, "reactive_power_kvar",
-    d.reactive_power_kvar, 4, first
-  );
-
-  addNumber(
-    json, "apparent_power_kva",
-    d.apparent_power_kva, 4, first
-  );
-
-  addNumber(json, "energy_kwh", d.energy_kwh, 4, first);
-
-  addNumber(
-    json, "reactive_energy_kvarh",
-    d.reactive_energy_kvarh, 4, first
-  );
-
-  addNumber(json, "frequency_hz", d.frequency_hz, 2, first);
-  addNumber(json, "power_factor", d.power_factor, 3, first);
-  addNumber(json, "run_hours", d.run_hours, 2, first);
-
-  addNumber(
-    json, "avg_load_percent",
-    d.avg_load_percent, 2, first
-  );
-
-  json += ",\"source\":\"PM2100_MODBUS\"}";
-
   Serial.println();
-  Serial.println("===== PAYLOAD VOLTVIEW =====");
-  Serial.println(json);
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.print("Wi-Fi terhubung. IP: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("Wi-Fi belum terhubung; akan dicoba lagi pada siklus berikutnya.");
+  }
+}
+
+void sendToVoltView(const String& payload) {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Data tidak dikirim: Wi-Fi terputus.");
+    return;
+  }
+
+  WiFiClientSecure client;
+  // Untuk pengujian awal. Untuk deployment permanen, sebaiknya verifikasi sertifikat TLS.
+  client.setInsecure();
 
   HTTPClient http;
-  http.setConnectTimeout(5000);
-  http.setTimeout(5000);
+  http.setTimeout(10000);
 
-  if (!http.begin(serverURL)) {
-    Serial.println("Gagal memulai HTTP.");
+  if (!http.begin(client, API_URL)) {
+    Serial.println("Gagal memulai koneksi ke API VoltView.");
     return;
   }
 
   http.addHeader("Content-Type", "application/json");
+  int httpCode = http.POST(payload);
+  String response = http.getString();
 
-  int httpCode = http.POST(json);
-
-  Serial.print("HTTP Status: ");
-  Serial.println(httpCode);
-
-  if (httpCode > 0) {
-    String response = http.getString();
-
-    Serial.println("Respons API:");
-    Serial.println(response);
-  } else {
-    Serial.print("HTTP gagal: ");
-    Serial.println(http.errorToString(httpCode));
-  }
+  Serial.printf("HTTP status: %d\n", httpCode);
+  if (response.length()) Serial.println("API: " + response);
 
   http.end();
 }
 
-// =====================================================
-// 11. KONEKSI HOTSPOT
-// =====================================================
-bool connectWiFi() {
-  Serial.println();
-  Serial.print("Menghubungkan ke hotspot: ");
-  Serial.println(ssid);
+void readAndSendData() {
+  // Register list dari file Schneider. Alamat kode = register tabel - 1.
+  // Current A/B/C/N/Avg: 3000/3002/3004/3006/3010
+  float currentR = readFloat32(2999);
+  float currentS = readFloat32(3001);
+  float currentT = readFloat32(3003);
+  float currentN = readFloat32(3005);
+  float currentAvgMeter = readFloat32(3009);
+  float currentAvg = isfinite(currentAvgMeter)
+                     ? currentAvgMeter
+                     : average3(currentR, currentS, currentT);
 
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
+  // Voltage L-L RS/ST/TR/Avg: 3020/3022/3024/3026
+  float voltageLLRS = readFloat32(3019);
+  float voltageLLST = readFloat32(3021);
+  float voltageLLTR = readFloat32(3023);
+  float voltageLLAvgMeter = readFloat32(3025);
+  float voltageLLAvg = isfinite(voltageLLAvgMeter)
+                       ? voltageLLAvgMeter
+                       : average3(voltageLLRS, voltageLLST, voltageLLTR);
 
-  const int maxAttempts = 30;
+  // Voltage L-N R/S/T/Avg: 3028/3030/3032/3036
+  float voltageLNR = readFloat32(3027);
+  float voltageLNS = readFloat32(3029);
+  float voltageLNT = readFloat32(3031);
+  float voltageLNAvgMeter = readFloat32(3035);
+  float voltageLNAvg = isfinite(voltageLNAvgMeter)
+                       ? voltageLNAvgMeter
+                       : average3(voltageLNR, voltageLNS, voltageLNT);
 
-  for (int i = 0; i < maxAttempts; i++) {
-    if (WiFi.status() == WL_CONNECTED) {
-      break;
-    }
+  // Total power. Register units in the spreadsheet: kW, kVAr, kVA.
+  float activePowerKW = readFloat32(3059);       // Active Power Total, table 3060
+  float reactivePowerKVAR = readFloat32(3067);  // Reactive Power Total, table 3068
+  float apparentPowerKVA = readFloat32(3075);   // Apparent Power Total, table 3076
 
-    delay(500);
-    Serial.print(".");
+  // Use IEEE-standard FLOAT32 PF register (table 3194 -> code 3193).
+  // Table register 3084 uses 4Q_FP_PF encoding, not FLOAT32.
+  float powerFactor = readFloat32(3193);
+  float frequencyHz = readFloat32(3109);        // Frequency, table 3110
+
+  // Permanent accumulated energy FLOAT32 registers.
+  // Active energy delivered: table 2676 -> code 2675 (kWh).
+  // Reactive energy delivered + received: table 2688 -> code 2687 (kVArh).
+  float energyKWh = readFloat32(2675);
+  float reactiveEnergyKVARh = readFloat32(2687);
+
+  // Run seconds delivered into load: UINT32 table 43546 -> code 43545.
+  uint32_t runSeconds = readUInt32(43545);
+  float runHours = (runSeconds == UINT32_MAX)
+                   ? NAN
+                   : ((float)runSeconds / 3600.0f);
+
+  float avgLoadPercent = NAN;
+  if (NOMINAL_APPARENT_POWER_KVA > 0.0f && isfinite(apparentPowerKVA)) {
+    avgLoadPercent = (apparentPowerKVA / NOMINAL_APPARENT_POWER_KVA) * 100.0f;
+    if (avgLoadPercent < 0.0f) avgLoadPercent = NAN;
   }
 
-  Serial.println();
+  float activePowerW = isfinite(activePowerKW) ? activePowerKW * 1000.0f : NAN;
 
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("Hotspot terhubung.");
+  String payload = "{";
+  payload += "\"source\":\"" + String(DATA_SOURCE) + "\",";
+  payload += "\"voltage\":" + jsonNumber(voltageLNAvg, 3) + ",";
+  payload += "\"voltage_ln_r\":" + jsonNumber(voltageLNR, 3) + ",";
+  payload += "\"voltage_ln_s\":" + jsonNumber(voltageLNS, 3) + ",";
+  payload += "\"voltage_ln_t\":" + jsonNumber(voltageLNT, 3) + ",";
+  payload += "\"voltage_ll_rs\":" + jsonNumber(voltageLLRS, 3) + ",";
+  payload += "\"voltage_ll_st\":" + jsonNumber(voltageLLST, 3) + ",";
+  payload += "\"voltage_ll_tr\":" + jsonNumber(voltageLLTR, 3) + ",";
+  payload += "\"current_a\":" + jsonNumber(currentAvg, 3) + ",";
+  payload += "\"current_r\":" + jsonNumber(currentR, 3) + ",";
+  payload += "\"current_s\":" + jsonNumber(currentS, 3) + ",";
+  payload += "\"current_t\":" + jsonNumber(currentT, 3) + ",";
+  payload += "\"current_n\":" + jsonNumber(currentN, 3) + ",";
+  payload += "\"power_w\":" + jsonNumber(activePowerW, 3) + ",";
+  payload += "\"reactive_power_kvar\":" + jsonNumber(reactivePowerKVAR, 3) + ",";
+  payload += "\"apparent_power_kva\":" + jsonNumber(apparentPowerKVA, 3) + ",";
+  payload += "\"energy_kwh\":" + jsonNumber(energyKWh, 3) + ",";
+  payload += "\"reactive_energy_kvarh\":" + jsonNumber(reactiveEnergyKVARh, 3) + ",";
+  payload += "\"frequency_hz\":" + jsonNumber(frequencyHz, 3) + ",";
+  payload += "\"power_factor\":" + jsonNumber(powerFactor, 4) + ",";
+  payload += "\"run_hours\":" + jsonNumber(runHours, 3) + ",";
+  payload += "\"avg_load_percent\":" + jsonNumber(avgLoadPercent, 2);
+  payload += "}";
 
-    Serial.print("IP ESP32: ");
-    Serial.println(WiFi.localIP());
+  Serial.println("\n----- DATA PM METER -----");
+  Serial.printf("V L-N avg : %.2f V\n", voltageLNAvg);
+  Serial.printf("V L-L avg : %.2f V\n", voltageLLAvg);
+  Serial.printf("I avg     : %.2f A | I N: %.2f A\n", currentAvg, currentN);
+  Serial.printf("P         : %.3f kW\n", activePowerKW);
+  Serial.printf("Q         : %.3f kVAr\n", reactivePowerKVAR);
+  Serial.printf("S         : %.3f kVA\n", apparentPowerKVA);
+  Serial.printf("PF        : %.4f | F: %.2f Hz\n", powerFactor, frequencyHz);
+  Serial.printf("Energy    : %.3f kWh | %.3f kVArh\n", energyKWh, reactiveEnergyKVARh);
+  if (isfinite(runHours)) Serial.printf("Run hours : %.2f h\n", runHours);
+  else Serial.println("Run hours : read error");
+  if (isfinite(avgLoadPercent)) Serial.printf("Load      : %.2f %%\n", avgLoadPercent);
+  else Serial.println("Load      : null (set nominal kVA if this metric is required)");
+  Serial.println("Payload: " + payload);
 
-    Serial.print("Gateway hotspot: ");
-    Serial.println(WiFi.gatewayIP());
-
-    Serial.print("IP server API: ");
-    Serial.println(serverURL);
-
-    return true;
-  }
-
-  Serial.println("Gagal terhubung ke hotspot.");
-  WiFi.disconnect();
-
-  return false;
+  sendToVoltView(payload);
 }
 
-// =====================================================
-// 12. SETUP
-// =====================================================
 void setup() {
   Serial.begin(115200);
-  delay(1000);
+  delay(500);
 
-  Serial.println();
-  Serial.println("================================");
-  Serial.println(" VOLTVIEW - PM2100 ACTUAL DATA ");
-  Serial.println("================================");
-
-  pinMode(RS485_DE_RE, OUTPUT);
-  digitalWrite(RS485_DE_RE, LOW);
-
-  Serial2.begin(
-    MODBUS_BAUD,
-    SERIAL_CONFIG,
-    RS485_RX,
-    RS485_TX
-  );
-
-  node.begin(MODBUS_SLAVE_ID, Serial2);
-  node.preTransmission(preTransmission);
-  node.postTransmission(postTransmission);
+  ModbusSerial.begin(MODBUS_BAUD, SERIAL_8E1, MODBUS_RX_PIN, MODBUS_TX_PIN);
+  node.begin(MODBUS_SLAVE_ID, ModbusSerial);
 
   connectWiFi();
+  Serial.println("VoltView PM meter sender siap.");
 }
 
-// =====================================================
-// 13. LOOP
-// =====================================================
 void loop() {
-  if (WiFi.status() != WL_CONNECTED) {
-    if (!connectWiFi()) {
-      delay(3000);
-      return;
-    }
-  }
+  if (WiFi.status() != WL_CONNECTED) connectWiFi();
 
   unsigned long now = millis();
-
-  if (now - lastSendTime >= SEND_INTERVAL) {
-    lastSendTime = now;
-    sendEnergyData();
+  if (now - lastSendMs >= SEND_INTERVAL_MS) {
+    lastSendMs = now;
+    readAndSendData();
   }
 }
