@@ -1,21 +1,42 @@
 
 const { neon } = require("@neondatabase/serverless");
+const { Redis } = require("@upstash/redis");
 
 const sql = neon(process.env.DATABASE_URL);
 
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN
+});
+
+const LIVE_KEY = "voltview:latest";
+const HISTORY_KEY = "voltview:live_history";
+
+const LIVE_TTL_SECONDS = 120;
+const HISTORY_TTL_SECONDS = 3600;
+const MAX_LIVE_HISTORY = 300;
+
 // =============================================
-// 1. KONFIGURASI CORS
+// CORS
 // =============================================
 
 const allowedOrigins = [
-  "https://voltview.vercel.app/",
-  "https://autoshipsmrc.site.je",
-  "http://localhost",
-  "http://127.0.0.1"
+  "https://voltview.vercel.app",
+  "https://autoshipsmrc.site.je"
 ];
 
+function isAllowedOrigin(origin) {
+  if (!origin) return false;
+
+  if (allowedOrigins.includes(origin)) return true;
+
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(
+    origin
+  );
+}
+
 // =============================================
-// 2. HELPER
+// HELPER
 // =============================================
 
 const numberOrNull = (value) => {
@@ -32,56 +53,163 @@ const numberOrNull = (value) => {
   return Number.isFinite(number) ? number : null;
 };
 
-const fields = [
-  "voltage",
-  "voltage_ln_r",
-  "voltage_ln_s",
-  "voltage_ln_t",
-  "voltage_ll_rs",
-  "voltage_ll_st",
-  "voltage_ll_tr",
-  "current_a",
-  "current_r",
-  "current_s",
-  "current_t",
-  "current_n",
-  "power_w",
-  "reactive_power_kvar",
-  "apparent_power_kva",
-  "energy_kwh",
-  "reactive_energy_kvarh",
-  "frequency_hz",
-  "power_factor",
-  "run_hours",
-  "avg_load_percent"
-];
-
 const average = (values) => {
-  const valid = values.filter(
-    (value) => value !== null
-  );
+  const valid = values.filter((value) => value !== null);
 
-  if (valid.length === 0) {
-    return null;
-  }
+  if (valid.length === 0) return null;
 
-  return (
-    valid.reduce((sum, value) => sum + value, 0) /
-    valid.length
-  );
+  return valid.reduce((sum, value) => sum + value, 0)
+    / valid.length;
 };
 
-// Mengubah satu baris database menjadi data dashboard.
-const readRow = (row) => {
+function parseStored(value) {
+  if (typeof value !== "string") return value;
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+// =============================================
+// NORMALISASI PAYLOAD ESP32
+// Mendukung format nested dari file .ino
+// dan format flat dari pengirim lama.
+// =============================================
+
+function normalizePayload(body) {
+  const voltage = body.voltage || {};
+  const current = body.current || {};
+  const power = body.power || {};
+  const energy = body.energy || {};
+
+  const pick = (flatValue, nestedValue) =>
+    numberOrNull(flatValue ?? nestedValue);
+
+  const voltage_ln_r = pick(
+    body.voltage_ln_r, voltage.r
+  );
+
+  const voltage_ln_s = pick(
+    body.voltage_ln_s, voltage.s
+  );
+
+  const voltage_ln_t = pick(
+    body.voltage_ln_t, voltage.t
+  );
+
+  const voltage_ll_rs = pick(
+    body.voltage_ll_rs, voltage.rs
+  );
+
+  const voltage_ll_st = pick(
+    body.voltage_ll_st, voltage.st
+  );
+
+  const voltage_ll_tr = pick(
+    body.voltage_ll_tr, voltage.tr
+  );
+
+  const current_r = pick(body.current_r, current.r);
+  const current_s = pick(body.current_s, current.s);
+  const current_t = pick(body.current_t, current.t);
+  const current_n = pick(body.current_n, current.n);
+
+  const activeKw = numberOrNull(power.active_kw);
+
+  const power_w =
+    numberOrNull(body.power_w) ??
+    (activeKw === null ? null : activeKw * 1000);
+
+  const reactive_power_kvar = pick(
+    body.reactive_power_kvar, power.reactive_kvar
+  );
+
+  const apparent_power_kva = pick(
+    body.apparent_power_kva, power.apparent_kva
+  );
+
+  const energy_kwh = pick(body.energy_kwh, energy.kwh);
+
+  const reactive_energy_kvarh = pick(
+    body.reactive_energy_kvarh, energy.kvarh
+  );
+
+  const voltageValues = [
+    voltage_ln_r,
+    voltage_ln_s,
+    voltage_ln_t
+  ];
+
+  const currentValues = [
+    current_r,
+    current_s,
+    current_t
+  ];
+
+  return {
+    voltage: numberOrNull(body.voltage) ??
+      average(voltageValues),
+
+    voltage_ln_r,
+    voltage_ln_s,
+    voltage_ln_t,
+
+    voltage_ll_rs,
+    voltage_ll_st,
+    voltage_ll_tr,
+
+    current_a: numberOrNull(body.current_a) ??
+      average(currentValues),
+
+    current_r,
+    current_s,
+    current_t,
+    current_n,
+
+    power_w,
+    reactive_power_kvar,
+    apparent_power_kva,
+
+    energy_kwh,
+    reactive_energy_kvarh,
+
+    frequency_hz: numberOrNull(body.frequency_hz),
+
+    power_factor: pick(
+      body.power_factor, power.power_factor
+    ),
+
+    run_hours: numberOrNull(body.run_hours),
+
+    avg_load_percent: pick(
+      body.avg_load_percent, power.avg_load_percent
+    ),
+
+    source:
+      typeof body.source === "string"
+        ? body.source.slice(0, 80)
+        : "UNKNOWN",
+
+    measured_at: new Date().toISOString()
+  };
+}
+
+// =============================================
+// FORMAT DATA UNTUK DASHBOARD
+// =============================================
+
+function readRow(row) {
   const n = (key) => numberOrNull(row[key]);
 
-  const voltageLn = [
+  const ln = [
     n("voltage_ln_r"),
     n("voltage_ln_s"),
     n("voltage_ln_t")
   ];
 
-  const voltageLl = [
+  const ll = [
     n("voltage_ll_rs"),
     n("voltage_ll_st"),
     n("voltage_ll_tr")
@@ -104,14 +232,13 @@ const readRow = (row) => {
         r: n("voltage_ln_r"),
         s: n("voltage_ln_s"),
         t: n("voltage_ln_t"),
-        avg: average(voltageLn)
+        avg: average(ln)
       },
-
       ll: {
         rs: n("voltage_ll_rs"),
         st: n("voltage_ll_st"),
         tr: n("voltage_ll_tr"),
-        avg: average(voltageLl)
+        avg: average(ll)
       }
     },
 
@@ -124,9 +251,7 @@ const readRow = (row) => {
     },
 
     power: {
-      active_kw:
-        powerW === null ? null : powerW / 1000,
-
+      active_kw: powerW === null ? null : powerW / 1000,
       reactive_kvar: n("reactive_power_kvar"),
       apparent_kva: n("apparent_power_kva"),
       power_factor: n("power_factor"),
@@ -144,25 +269,88 @@ const readRow = (row) => {
     timestamp: row.measured_at,
     history: []
   };
-};
+}
+
+function chartPoint(row) {
+  const powerW = numberOrNull(row.power_w);
+
+  return {
+    timestamp: row.measured_at,
+    voltage: numberOrNull(row.voltage),
+    current_a: numberOrNull(row.current_a),
+    active_kw: powerW === null ? null : powerW / 1000,
+    reactive_kvar: numberOrNull(row.reactive_power_kvar),
+    apparent_kva: numberOrNull(row.apparent_power_kva)
+  };
+}
 
 // =============================================
-// 3. API UTAMA
+// SIMPAN DATA PERMANEN KE NEON
+// Hanya dipanggil jika persist === true.
+// =============================================
+
+async function saveToDatabase(row) {
+  await sql`
+    INSERT INTO energy_readings (
+      voltage,
+      voltage_ln_r,
+      voltage_ln_s,
+      voltage_ln_t,
+      voltage_ll_rs,
+      voltage_ll_st,
+      voltage_ll_tr,
+      current_a,
+      current_r,
+      current_s,
+      current_t,
+      current_n,
+      power_w,
+      reactive_power_kvar,
+      apparent_power_kva,
+      energy_kwh,
+      reactive_energy_kvarh,
+      frequency_hz,
+      power_factor,
+      run_hours,
+      avg_load_percent,
+      source
+    )
+    VALUES (
+      ${row.voltage},
+      ${row.voltage_ln_r},
+      ${row.voltage_ln_s},
+      ${row.voltage_ln_t},
+      ${row.voltage_ll_rs},
+      ${row.voltage_ll_st},
+      ${row.voltage_ll_tr},
+      ${row.current_a},
+      ${row.current_r},
+      ${row.current_s},
+      ${row.current_t},
+      ${row.current_n},
+      ${row.power_w},
+      ${row.reactive_power_kvar},
+      ${row.apparent_power_kva},
+      ${row.energy_kwh},
+      ${row.reactive_energy_kvarh},
+      ${row.frequency_hz},
+      ${row.power_factor},
+      ${row.run_hours},
+      ${row.avg_load_percent},
+      ${row.source}
+    )
+  `;
+}
+
+// =============================================
+// API UTAMA
 // =============================================
 
 module.exports = async (req, res) => {
-  // ---------------------------------------------
-  // CORS: Dashboard lokal dan website online
-  // ---------------------------------------------
-
   const origin = req.headers.origin;
 
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader(
-      "Access-Control-Allow-Origin",
-      origin
-    );
-
+  if (isAllowedOrigin(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
   }
 
@@ -178,14 +366,13 @@ module.exports = async (req, res) => {
 
   res.setHeader("Cache-Control", "no-store");
 
-  // Preflight request browser.
   if (req.method === "OPTIONS") {
     return res.status(204).end();
   }
 
   try {
     // =========================================
-    // POST: MENYIMPAN DATA ESP32 KE NEON
+    // POST: TERIMA DATA ESP32
     // =========================================
 
     if (req.method === "POST") {
@@ -202,86 +389,57 @@ module.exports = async (req, res) => {
         });
       }
 
-      const values = fields.map((field) =>
-        numberOrNull(body[field])
+      const row = normalizePayload(body);
+
+      // Data live disimpan sementara di Redis.
+      // Tidak membuat INSERT ke Neon pada tahap ini.
+      await redis.set(
+        LIVE_KEY,
+        JSON.stringify(row),
+        { ex: LIVE_TTL_SECONDS }
       );
 
-      const source =
-        typeof body.source === "string"
-          ? body.source.slice(0, 80)
-          : "UNKNOWN";
+      // Riwayat live sementara untuk grafik.
+      await redis.lpush(
+        HISTORY_KEY,
+        JSON.stringify(row)
+      );
 
-      await sql`
-        INSERT INTO energy_readings (
-          voltage,
-          voltage_ln_r,
-          voltage_ln_s,
-          voltage_ln_t,
-          voltage_ll_rs,
-          voltage_ll_st,
-          voltage_ll_tr,
-          current_a,
-          current_r,
-          current_s,
-          current_t,
-          current_n,
-          power_w,
-          reactive_power_kvar,
-          apparent_power_kva,
-          energy_kwh,
-          reactive_energy_kvarh,
-          frequency_hz,
-          power_factor,
-          run_hours,
-          avg_load_percent,
-          source
-        )
-        VALUES (
-          ${values[0]},
-          ${values[1]},
-          ${values[2]},
-          ${values[3]},
-          ${values[4]},
-          ${values[5]},
-          ${values[6]},
-          ${values[7]},
-          ${values[8]},
-          ${values[9]},
-          ${values[10]},
-          ${values[11]},
-          ${values[12]},
-          ${values[13]},
-          ${values[14]},
-          ${values[15]},
-          ${values[16]},
-          ${values[17]},
-          ${values[18]},
-          ${values[19]},
-          ${values[20]},
-          ${source}
-        )
-      `;
+      await redis.ltrim(
+        HISTORY_KEY,
+        0,
+        MAX_LIVE_HISTORY - 1
+      );
 
-      return res.status(201).json({
+      await redis.expire(
+        HISTORY_KEY,
+        HISTORY_TTL_SECONDS
+      );
+
+      // Simpan permanen hanya jika ESP32 meminta.
+      const persist = body.persist === true;
+
+      if (persist) {
+        await saveToDatabase(row);
+      }
+
+      return res.status(200).json({
         success: true,
-        message: "Data pengukuran berhasil disimpan.",
-        saved_to_database: true
+        message: persist
+          ? "Data berhasil disimpan ke database."
+          : "Data live diperbarui tanpa penyimpanan database.",
+        data_available: true,
+        saved_to_database: persist,
+        source: row.source,
+        timestamp: row.measured_at
       });
     }
 
     // =========================================
-    // GET: DASHBOARD DAN EKSPOR EXCEL
+    // GET: EKSPOR EXCEL
     // =========================================
 
     if (req.method === "GET") {
-      // -----------------------------------------
-      // MODE EKSPOR
-      // Contoh:
-      // ?export=1&range=day
-      // ?export=1&range=week
-      // ?export=1&range=month
-      // -----------------------------------------
-
       if (req.query.export === "1") {
         const range = req.query.range || "day";
 
@@ -319,10 +477,35 @@ module.exports = async (req, res) => {
         });
       }
 
-      // -----------------------------------------
-      // MODE DASHBOARD
-      // Mengambil maksimal 100 data terbaru.
-      // -----------------------------------------
+      // =======================================
+      // GET: DATA LIVE DARI REDIS
+      // =======================================
+
+      const cached = parseStored(
+        await redis.get(LIVE_KEY)
+      );
+
+      if (cached) {
+        const latest = readRow(cached);
+
+        const cachedHistory = await redis.lrange(
+          HISTORY_KEY,
+          0,
+          MAX_LIVE_HISTORY - 1
+        );
+
+        latest.history = cachedHistory
+          .map(parseStored)
+          .filter((row) => row && typeof row === "object")
+          .reverse()
+          .map(chartPoint);
+
+        return res.status(200).json(latest);
+      }
+
+      // =======================================
+      // CADANGAN: DATA TERAKHIR DARI DATABASE
+      // =======================================
 
       const rows = await sql`
         SELECT *
@@ -340,40 +523,15 @@ module.exports = async (req, res) => {
         });
       }
 
-      // Data terbaru untuk kartu monitoring.
       const latest = readRow(rows[0]);
 
-      // Data historis untuk grafik.
       latest.history = rows
         .slice()
         .reverse()
-        .map((row) => {
-          const powerW = numberOrNull(row.power_w);
-
-          return {
-            timestamp: row.measured_at,
-
-            voltage: numberOrNull(row.voltage),
-
-            current_a: numberOrNull(row.current_a),
-
-            active_kw:
-              powerW === null ? null : powerW / 1000,
-
-            reactive_kvar:
-              numberOrNull(row.reactive_power_kvar),
-
-            apparent_kva:
-              numberOrNull(row.apparent_power_kva)
-          };
-        });
+        .map(chartPoint);
 
       return res.status(200).json(latest);
     }
-
-    // =========================================
-    // METODE LAIN DITOLAK
-    // =========================================
 
     res.setHeader("Allow", "GET, POST, OPTIONS");
 
