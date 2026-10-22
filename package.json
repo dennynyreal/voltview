@@ -1,3 +1,4 @@
+
 {
   "name": "voltview",
   "version": "1.0.0",
@@ -12,13 +13,8 @@
   "type": "commonjs",
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
+    "@upstash/redis": "^1.34.0",
     "@tailwindcss/cli": "^4.3.3",
     "tailwindcss": "^4.3.3"
-  }
-  
-{
-  "dependencies": {
-    "@neondatabase/serverless": "^1.0.0",
-    "@upstash/redis": "^1.34.0"
   }
 }
