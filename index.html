@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0b1220" />
-  <title>VoltView — Building Energy Monitor</title>
+  <title>VoltView — SIMTITS Power Monitoring</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <script>
@@ -150,7 +150,7 @@
               <span class="brand font-extrabold text-slate-900">VoltView<span class="text-emerald-500">.</span></span>
             </div>
             <div class="hidden lg:block"><p class="text-xs font-semibold uppercase tracking-[.16em] text-slate-400">Building energy monitoring</p><h1 class="mt-1 text-xl font-extrabold tracking-tight text-slate-900">Energy overview</h1></div>
-            <div class="lg:hidden text-right"><div class="text-sm font-bold text-slate-900">Energy overview</div><div class="text-[11px] text-slate-500">Gedung perkuliahan</div></div>
+            <div class="lg:hidden text-right"><div class="text-sm font-bold text-slate-900">Energy overview</div><div class="text-[11px] text-slate-500">Gedung SIMT—ITS</div></div>
           </div>
           <div class="flex flex-wrap items-center gap-2 sm:gap-3">
             <div class="mr-auto flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 sm:mr-0">
@@ -273,7 +273,7 @@
           <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3"><div class="rounded-xl border border-slate-100 p-4"><div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Power meter</div><div class="mt-2 text-sm font-extrabold text-slate-900">Schneider Electric PM2100</div><div class="mt-1 text-xs text-slate-500">Three-phase power meter</div></div><div class="rounded-xl border border-slate-100 p-4"><div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Field connection</div><div class="mt-2 text-sm font-extrabold text-slate-900">ESP32 · RS485 / Modbus RTU</div><div class="mt-1 text-xs text-slate-500">ESP32 mengirim data melalui HTTP ke server lokal</div></div><div class="rounded-xl border border-slate-100 p-4"><div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Dashboard API endpoint</div><div class="mt-2 break-all font-mono text-xs font-bold text-slate-900" id="endpointDisplay">const API_URL = 'https://voltview.vercel.app/api/voltview';</div><div class="mt-1 text-xs text-slate-500">GET JSON · rentang grafik dikirim sebagai parameter</div></div></div>
           <div class="mt-4 flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div class="max-w-2xl"><div class="text-xs font-bold text-slate-800">Kontrak data front-end</div><p class="mt-1 text-xs leading-relaxed text-slate-500">Endpoint perlu mengembalikan objek JSON dengan properti <code class="rounded bg-white px-1 py-0.5 text-slate-700">voltage</code>, <code class="rounded bg-white px-1 py-0.5 text-slate-700">current</code>, <code class="rounded bg-white px-1 py-0.5 text-slate-700">power</code>, <code class="rounded bg-white px-1 py-0.5 text-slate-700">energy</code>, <code class="rounded bg-white px-1 py-0.5 text-slate-700">run_hours</code>, dan <code class="rounded bg-white px-1 py-0.5 text-slate-700">history</code>.</p></div><button id="exportBtn" type="button" class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-100"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v3h16v-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Export laporan lengkap (XLSX)</button></div>
         </section>
-        <footer class="flex flex-col gap-2 py-7 text-[10px] text-slate-400 sm:flex-row sm:items-center sm:justify-between"><p>VoltView · Building Energy Monitoring Dashboard</p><p>Frontend demo · Pastikan satuan & register meter tervalidasi saat integrasi.</p></footer>
+        <footer class="flex flex-col gap-2 py-7 text-[10px] text-slate-400 sm:flex-row sm:items-center sm:justify-between"><p>VoltView · SIMT—ITS Power Monitoring</p><p>© 2026 Autoships MRC. All rights reserved.</p></footer>
       </div>
     </main>
   </div>
