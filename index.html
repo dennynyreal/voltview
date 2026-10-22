@@ -1031,8 +1031,6 @@ console.log(
         measurement.getRow(1).values = columns.map(column => column.header);
         styleHeader(measurement.getRow(1));
 
-       
-
 records.forEach(record => {
     const row = {};
 
@@ -1058,8 +1056,6 @@ records.forEach(record => {
 
     measurement.addRow(row);
 });
-
-
         styleBody(measurement, 2, measurement.rowCount);
 
         // Format angka.
