@@ -1032,6 +1032,7 @@ console.log(
         styleHeader(measurement.getRow(1));
 
        
+
 records.forEach(record => {
     const row = {};
 
@@ -1039,11 +1040,10 @@ records.forEach(record => {
         let value = record[column.key] ?? null;
 
         if (
-    column.key === 'measured_at' &&
-    value !== null
-) {
-    value = formatJakartaDateTime(value);
-}
+            column.key === 'measured_at' &&
+            value !== null
+        ) {
+            value = formatJakartaDateTime(value);
         } else if (
             numericFields.includes(column.key) &&
             value !== null &&
