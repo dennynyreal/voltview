@@ -684,6 +684,27 @@ try {
 
 
 
+function formatJakartaDateTime(value) {
+    if (!value) return '';
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return String(value);
+    }
+
+    return new Intl.DateTimeFormat('id-ID', {
+        timeZone: 'Asia/Jakarta',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hourCycle: 'h23'
+    }).format(date);
+}
+
 
 $('exportBtn').addEventListener('click', async () => {
     const button = $('exportBtn');
@@ -981,36 +1002,58 @@ $('exportBtn').addEventListener('click', async () => {
         measurement.getRow(1).values = columns.map(column => column.header);
         styleHeader(measurement.getRow(1));
 
-        records.forEach(record => {
-            const row = {};
+       
+records.forEach(record => {
+    const row = {};
 
-            columns.forEach(column => {
-                let value = record[column.key] ?? null;
+    columns.forEach(column => {
+        let value = record[column.key] ?? null;
 
-                if (
-                    column.key === 'measured_at' &&
-                    value !== null
-                ) {
-                    const parsedDate = new Date(value);
+        if (
+            column.key === 'measured_at' &&
+            value !== null
+        ) {
+            const parsedDate = new Date(value);
 
-                    // Simpan sebagai tanggal Excel jika valid.
-                    value = Number.isNaN(parsedDate.getTime())
-                        ? String(value)
-                        : parsedDate;
-                } else if (
-                    numericFields.includes(column.key) &&
-                    value !== null &&
-                    value !== '' &&
-                    Number.isFinite(Number(value))
-                ) {
-                    value = Number(value);
-                }
+            if (Number.isNaN(parsedDate.getTime())) {
+                value = String(value);
+            } else {
+                // Konversi timestamp menjadi komponen waktu WIB.
+                const parts = new Intl.DateTimeFormat('en-GB', {
+                    timeZone: 'Asia/Jakarta',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hourCycle: 'h23'
+                }).formatToParts(parsedDate);
 
-                row[column.key] = value;
-            });
+                const part = type =>
+                    parts.find(item => item.type === type)?.value || '';
 
-            measurement.addRow(row);
-        });
+                // Gunakan teks agar Excel tidak mengonversi
+                // timestamp kembali ke zona waktu lokal.
+                value =
+                    `${part('day')}/${part('month')}/${part('year')} ` +
+                    `${part('hour')}:${part('minute')}:${part('second')}`;
+            }
+        } else if (
+            numericFields.includes(column.key) &&
+            value !== null &&
+            value !== '' &&
+            Number.isFinite(Number(value))
+        ) {
+            value = Number(value);
+        }
+
+        row[column.key] = value;
+    });
+
+    measurement.addRow(row);
+});
+
 
         styleBody(measurement, 2, measurement.rowCount);
 
@@ -1021,11 +1064,9 @@ $('exportBtn').addEventListener('click', async () => {
             columns.forEach((column, index) => {
                 const cell = row.getCell(index + 1);
 
-                if (column.key === 'measured_at' && cell.value instanceof Date) {
-                    cell.numFmt = 'dd/mm/yyyy hh:mm:ss';
-                } else if (numericFields.includes(column.key)) {
-                    cell.numFmt = '#,##0.00;[Red]-#,##0.00';
-                }
+if (numericFields.includes(column.key)) {
+    cell.numFmt = '#,##0.00;[Red]-#,##0.00';
+}
             });
         });
 
@@ -1149,8 +1190,12 @@ $('exportBtn').addEventListener('click', async () => {
         );
 
         const objectUrl = URL.createObjectURL(blob);
-        const date = new Date().toISOString().slice(0, 10);
-        const filename = `voltview-report-${range}-${date}.xlsx`;
+const date = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+}).format(new Date());        const filename = `voltview-report-${range}-${date}.xlsx`;
 
         const link = document.createElement('a');
         link.href = objectUrl;
